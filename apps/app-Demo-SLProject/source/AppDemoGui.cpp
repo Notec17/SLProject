@@ -1077,6 +1077,8 @@ void AppDemoGui::buildMenuBar(SLScene* s, SLSceneView* sv)
                         s->onLoad(s, sv, SID_VideoSensorAR);
                     if (ImGui::MenuItem("Christoffel Tower AR (Main)", nullptr, sid == SID_VideoChristoffel))
                         s->onLoad(s, sv, SID_VideoChristoffel);
+                    if (ImGui::MenuItem("Augusta Raurica AR (Main)", nullptr, sid == SID_VideoAugustaRaurica))
+                        s->onLoad(s, sv, SID_VideoAugustaRaurica);
 
                     ImGui::EndMenu();
                 }

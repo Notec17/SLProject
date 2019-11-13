@@ -2621,6 +2621,58 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         sv->camera(cam1);
         s->root3D(scene);
     }
+    else if (SLApplication::sceneID == SID_VideoAugustaRaurica) //.......................................
+    {
+        s->name("Augusta Raurica AR");
+        s->info("Augmented Reality for Augusta Raurica");
+
+        // Create textures and materials
+        SLSkybox*    skybox    = new SLSkybox("Desert+X1024_C.jpg", "Desert-X1024_C.jpg", "Desert+Y1024_C.jpg", "Desert-Y1024_C.jpg", "Desert+Z1024_C.jpg", "Desert-Z1024_C.jpg");
+        SLGLTexture* skyboxTex = skybox->meshes()[0]->mat()->textures()[0];
+
+        SLCamera* cam1 = new SLCamera("Camera 1");
+        cam1->translation(0, 50, -150);
+        cam1->lookAt(0, 0, 0);
+        cam1->clipNear(0.1f);
+        cam1->clipFar(1000.0f);
+        cam1->focalDist(150);
+
+        // Create directional light for the sun light
+        SLLightDirect* light = new SLLightDirect(5.0f);
+        light->ambient(SLCol4f(1, 1, 1));
+        light->diffuse(SLCol4f(1, 1, 1));
+        light->specular(SLCol4f(1, 1, 1));
+        light->attenuation(1, 0, 0);
+        light->translation(0, 10, 0);
+        light->lookAt(10, 0, 10);
+
+        SLAssimpImporter importer;
+        SLNode*          TheaterAndTempel = importer.load("FBX/AugustaRaurica/Tempel-Theater-01.fbx");
+        TheaterAndTempel->scale(0.01f);
+
+        // Add axis object a world origin (Loeb Ecke)
+        SLNode* axis = new SLNode(new SLCoordAxis(), "Axis Node");
+        axis->setDrawBitsRec(SL_DB_WIREMESH, false);
+        axis->scale(10);
+        axis->rotate(-90, 1, 0, 0);
+
+        // Set some ambient light
+        for (auto child : TheaterAndTempel->children())
+            for (auto mesh : child->meshes())
+                mesh->mat()->ambient(SLCol4f(0.25f, 0.23f, 0.15f));
+
+        SLNode* scene = new SLNode("Scene");
+        scene->addChild(light);
+        scene->addChild(axis);
+        scene->addChild(TheaterAndTempel);
+        scene->addChild(cam1);
+
+        sv->doWaitOnIdle(false); // for constant video feed
+        sv->camera(cam1);
+        sv->skybox(skybox);
+        s->root3D(scene);
+
+    }
     else if (SLApplication::sceneID == SID_RTMuttenzerBox) //............................................
     {
         s->name("Muttenzer Box (RT)");
