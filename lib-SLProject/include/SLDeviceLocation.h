@@ -45,7 +45,7 @@ class SLNode;
 */
 class SLDeviceLocation
 {
-    public:
+public:
     SLDeviceLocation() { init(); }
     void init();
     void onLocationLLA(SLdouble latDEG,
@@ -89,7 +89,7 @@ class SLDeviceLocation
     SLfloat originSolarZenit() const { return _originSolarZenit; }
     SLfloat originSolarAzimut() const { return _originSolarAzimut; }
 
-    private:
+private:
     SLbool       _isUsed;             //!< Flag if the devices GPS Sensor is used
     SLbool       _isFirstSensorValue; //!< Flag for the first sensor values
     SLVec3d      _locLLA;             //!< Earth location in latitudeDEG, longitudeDEG & AltitudeM on WGS84 geoid

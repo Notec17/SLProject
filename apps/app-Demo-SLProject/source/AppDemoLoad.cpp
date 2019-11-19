@@ -2667,6 +2667,29 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         scene->addChild(TheaterAndTempel);
         scene->addChild(cam1);
 
+        //initialize sensor stuff
+        SLApplication::devLoc.originLLA(47.53319, 7.72207, 442.0);      // Zentrum Theater 3
+        SLApplication::devLoc.defaultLLA(47.53294, 7.72084, 450.0);     // Eingangtor Tempel
+        SLApplication::devLoc.locMaxDistanceM(1000.0f);                 // Max. Distanz. zum Loeb Ecken
+        SLApplication::devLoc.improveOrigin(false);                     // Keine autom. Verbesserung vom Origin
+        SLApplication::devLoc.useOriginAltitude(true);
+        SLApplication::devLoc.hasOrigin(true);
+        SLApplication::devRot.zeroYawAtStart(false);
+
+#if defined(SL_OS_MACIOS) || defined(SL_OS_ANDROID)
+        SLApplication::devLoc.isUsed(true);
+        SLApplication::devRot.isUsed(true);
+        cam1->camAnim(SLCamAnim::CA_deviceRotLocYUp);
+#else
+        SLApplication::devLoc.isUsed(false);
+        SLApplication::devRot.isUsed(false);
+        //SLVec3d pos_d = SLApplication::devLoc.defaultENU() - SLApplication::devLoc.originENU();
+        //SLVec3f pos_f((SLfloat)pos_d.x, (SLfloat)pos_d.y, (SLfloat)pos_d.z);
+        //cam1->translation(pos_f);
+        //cam1->lookAt(SLVec3f::ZERO);
+        //cam1->camAnim(SLCamAnim::CA_turntableYUp);
+#endif
+
         sv->doWaitOnIdle(false); // for constant video feed
         sv->camera(cam1);
         sv->skybox(skybox);
