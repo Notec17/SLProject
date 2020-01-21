@@ -19,12 +19,12 @@
 //-----------------------------------------------------------------------------
 SLGLConetracer::SLGLConetracer()
 {
-    SL_LOG("Constructor     : SLConetracer\n");
+    //SL_LOG("Constructor     : SLConetracer\n");
 }
 //-----------------------------------------------------------------------------
 SLGLConetracer::~SLGLConetracer()
 {
-    SL_LOG("Destructor      : ~SLConetracer\n");
+    //SL_LOG("Destructor      : ~SLConetracer\n");
 }
 //-----------------------------------------------------------------------------
 void SLGLConetracer::init(SLint scrW, SLint scrH)

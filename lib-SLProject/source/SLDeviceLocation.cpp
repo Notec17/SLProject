@@ -212,8 +212,8 @@ SLbool SLDeviceLocation::calculateSolarAngles(SLdouble latDEG,
     SLint    result;
 
     //enter required input values into SPA structure
-    spa.year      = lt.tm_year;
-    spa.month     = lt.tm_mon;
+    spa.year      = lt.tm_year + 1900;
+    spa.month     = lt.tm_mon + 1;
     spa.day       = lt.tm_mday;
     spa.hour      = lt.tm_hour;
     spa.minute    = lt.tm_min;

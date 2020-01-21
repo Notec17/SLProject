@@ -858,7 +858,7 @@ void CVCapture::loadCalibrations(const string& computerInfo,
                                                  SLApplication::CALIB_FTP_DIR,
                                                  errorMsg))
         {
-            Utils::log(errorMsg.c_str());
+            Utils::log("Error: %s\n", errorMsg.c_str());
         }
     }
     if (!mainCam.calibration.load(configPath, mainCalibFilename))
