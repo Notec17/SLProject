@@ -1117,9 +1117,9 @@ static int bit_pattern_31_[256 * 4] =
     -11 /*mean (0.127148), correlation (0.547401)*/
 };
 
-GLSLextractor::GLSLextractor(int w, int h)
+GLSLextractor::GLSLextractor(int w, int h, int nbKeypointsBigSigma, int nbKeypointsSmallSigma, float highThrs, float lowThrs, float bigSigma, float smallSigma)
   : KPextractor("GLSL"),
-    imgProc(w, h)
+    imgProc(w, h, nbKeypointsBigSigma, nbKeypointsSmallSigma, highThrs, lowThrs, bigSigma, smallSigma)
 {
     mvScaleFactor.resize(1);
     mvLevelSigma2.resize(1);
@@ -1133,8 +1133,8 @@ GLSLextractor::GLSLextractor(int w, int h)
     nlevels             = 1;
     scaleFactor         = 1.0;
 
-    old = cv::Mat(w, h, CV_8UC1);
-    old2 = cv::Mat(w, h, CV_8UC1);
+    idx = 0;
+    images[1] = cv::Mat(w, h, CV_8UC1);
 
     const int    npoints  = 512;
     const Point* pattern0 = (const Point*)bit_pattern_31_;
@@ -1144,54 +1144,25 @@ GLSLextractor::GLSLextractor(int w, int h)
 static void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const vector<Point>& pattern)
 {
     for (size_t i = 0; i < keypoints.size(); i++)
+    {
         computeBRIEFDescriptor(keypoints[i], image, &pattern[0], descriptors.ptr((int)i));
+    }
 }
 
 void GLSLextractor::operator()(InputArray _image, vector<KeyPoint>& _keypoints, OutputArray _descriptors)
 {
-    Mat image = _image.getMat();
+    images[idx] = _image.getMat().clone();
     Mat m;
     Mat descriptors;
 
-    AVERAGE_TIMING_START("Get Keypoint");
-
-    glBindTexture(GL_TEXTURE_2D, imgProc.renderTextures[0]);
-    glTexImage2D(GL_TEXTURE_2D,
-                 0,
-                 GL_R8,
-                 image.cols,
-                 image.rows,
-                 0,
-                 GL_RED,
-                 GL_UNSIGNED_BYTE,
-                 image.data);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    AVERAGE_TIMING_START("GLSL Hessian");
 
     _keypoints.clear();
+
+    imgProc.setInputTexture(images[idx]);
     imgProc.gpu_kp();
     imgProc.readResult(_keypoints);
 
-    /*
-    mutex mymutex;
-
-    parallel_for_(Range(0, m.rows * m.cols), [&](const Range& range) {
-        for (int r = range.start; r < range.end; r++)
-        {
-            int            i  = r / m.cols;
-            int            j  = r % m.cols;
-            if (i >= 15 && j >= 15 && i < m.rows - 15 && j < m.cols - 15 && m.ptr<uchar>(i)[j] > 0)
-            {
-                mymutex.lock();
-                _keypoints.push_back(KeyPoint(Point2f(j, i), 1));
-                mymutex.unlock();
-            }
-        }
-    });
-    */
-
-    AVERAGE_TIMING_STOP("Get Keypoint");
-
-    AVERAGE_TIMING_START("DESC");
     if (_keypoints.size() == 0)
     {
         _descriptors.release();
@@ -1203,15 +1174,13 @@ void GLSLextractor::operator()(InputArray _image, vector<KeyPoint>& _keypoints, 
         descriptors = _descriptors.getMat();
     }
 
+    idx = (idx+1)%2;
     Mat workingMat;
-    GaussianBlur(old2, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
+    GaussianBlur(images[idx], workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
 
     // Compute the descriptors
     Mat desc = descriptors.rowRange(0, _keypoints.size());
     computeDescriptors(workingMat, _keypoints, desc, pattern);
-    old2 = old.clone();
-    old = image.clone();
 
-    AVERAGE_TIMING_STOP("DESC");
+    AVERAGE_TIMING_STOP("GLSL Hessian");
 }
-

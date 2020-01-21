@@ -2,15 +2,20 @@
 #define SL_IMGUI_VIDEOCONTROLS_H
 
 #include <AppDemoGuiInfosDialog.h>
+#include <WAIApp.h>
+
+class WAIApp;
 
 class AppDemoGuiVideoControls : public AppDemoGuiInfosDialog
 {
-    public:
-    AppDemoGuiVideoControls(const std::string& name, bool* activator);
+public:
+    AppDemoGuiVideoControls(const std::string& name, bool* activator, std::queue<WAIEvent*>* eventQueue);
 
     void buildInfos(SLScene* s, SLSceneView* sv) override;
 
-    private:
+private:
+    bool                   _pauseVideo;
+    std::queue<WAIEvent*>* _eventQueue;
 };
 
 #endif

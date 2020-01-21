@@ -25,7 +25,7 @@ for a good top down information.
 #include <CVImage.h>
 #include <Averaged.h>
 #include <opencv2/opencv.hpp>
-#include <CVCalibration.h>
+#include <CVCamera.h>
 #include <HighResTimer.h>
 
 //-----------------------------------------------------------------------------
@@ -104,7 +104,6 @@ public: //! Public static instance getter for singleton pattern
     AvgFloat& captureTimesMS() { return _captureTimesMS; }
     void      loadCalibrations(const string& computerInfo,
                                const string& configPath,
-                               const string& calibInitPath,
                                const string& videoPath);
     void      setCameraSize(int sizeIndex,
                             int sizeIndexMax,
@@ -114,6 +113,7 @@ public: //! Public static instance getter for singleton pattern
     void moveCapturePosition(int n);
 
     CVMat       lastFrame;          //!< last frame grabbed in RGB
+    CVMat       lastFrameFull;      //!< last frame grabbed in RGB and full resolution
     CVMat       lastFrameGray;      //!< last frame in grayscale
     CVPixFormat format;             //!< GL pixel format
     CVSize      captureSize;        //!< size of captured frame
@@ -130,10 +130,10 @@ public: //! Public static instance getter for singleton pattern
     CVVSize camSizes;           //!< All possible camera sizes
     int     activeCamSizeIndex; //!< Currently active camera size index
 
-    CVCalibration* activeCalib;    //!< Pointer to the active calibration
-    CVCalibration  calibMainCam;   //!< OpenCV calibration for main video camera
-    CVCalibration  calibScndCam;   //!< OpenCV calibration for secondary video camera
-    CVCalibration  calibVideoFile; //!< OpenCV calibration for simulation using a video file
+    CVCamera* activeCamera; //!< Pointer to the active camera
+    CVCamera  mainCam;      //!< camera representation for main video camera
+    CVCamera  scndCam;      //!< camera representation for secondary video camera
+    CVCamera  videoFileCam; //!< camera representation for simulation using a video file
 
 private:
     CVCapture(); //!< private onetime constructor

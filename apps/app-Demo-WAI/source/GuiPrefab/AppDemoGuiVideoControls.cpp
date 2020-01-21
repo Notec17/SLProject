@@ -1,9 +1,13 @@
 #include <AppDemoGuiVideoControls.h>
-#include <AppWAI.h>
+#include <WAIApp.h>
 #include <CVCapture.h>
 
-AppDemoGuiVideoControls::AppDemoGuiVideoControls(const std::string& name, bool* activator)
-  : AppDemoGuiInfosDialog(name, activator)
+AppDemoGuiVideoControls::AppDemoGuiVideoControls(const std::string&      name,
+                                                 bool*                   activator,
+                                                 std ::queue<WAIEvent*>* eventQueue)
+  : AppDemoGuiInfosDialog(name, activator),
+    _eventQueue(eventQueue),
+    _pauseVideo(false)
 {
 }
 
@@ -19,55 +23,68 @@ void AppDemoGuiVideoControls::buildInfos(SLScene* s, SLSceneView* sv)
 
     ImGui::Separator();
 
-    if (ImGui::Button((WAIApp::pauseVideo ? "Play" : "Pause"),
+    bool eventOccured         = false;
+    int  videoCursorMoveIndex = 0;
+
+    if (ImGui::Button((_pauseVideo ? "Play" : "Pause"),
                       ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f)))
     {
-        WAIApp::pauseVideo = !WAIApp::pauseVideo;
+        _pauseVideo = !_pauseVideo;
+
+        eventOccured = true;
     }
 
     ImGui::Text("Frame control");
     if (ImGui::Button("<", ImVec2(0, 0)))
     {
-        WAIApp::videoCursorMoveIndex = -1;
+        videoCursorMoveIndex += -1;
+
+        eventOccured = true;
     }
     ImGui::SameLine();
     if (ImGui::Button("<<", ImVec2(0, 0)))
     {
-        WAIApp::videoCursorMoveIndex = -10;
+        videoCursorMoveIndex += -10;
+
+        eventOccured = true;
     }
     ImGui::SameLine();
     if (ImGui::Button("<<<", ImVec2(0, 0)))
     {
-        WAIApp::videoCursorMoveIndex = -100;
+        videoCursorMoveIndex += -100;
+
+        eventOccured = true;
     }
     ImGui::SameLine();
     if (ImGui::Button(">>>", ImVec2(0, 0)))
     {
-        WAIApp::videoCursorMoveIndex = 100;
+        videoCursorMoveIndex += 100;
+
+        eventOccured = true;
     }
     ImGui::SameLine();
     if (ImGui::Button(">>", ImVec2(0, 0)))
     {
-        WAIApp::videoCursorMoveIndex = 10;
+        videoCursorMoveIndex += 10;
+
+        eventOccured = true;
     }
     ImGui::SameLine();
     if (ImGui::Button(">", ImVec2(0, 0)))
     {
-        WAIApp::videoCursorMoveIndex = 1;
-    }
+        videoCursorMoveIndex += 1;
 
-#if 0
-    if (ImGui::Button("Save current frame with candidates", ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f)))
-    {
-        if (WAIApp::mode != nullptr && WAIApp::mode->retainImage())
-        {
-            WAIFrame     frame = WAIApp::mode->getCurrentFrame();
-            WAIKeyFrame* ref   = frame.mpReferenceKF;
-
-            // TODO(dgj1): Save image from frame and its reference keyframe
-        }
+        eventOccured = true;
     }
-#endif
 
     ImGui::End();
+
+    if (eventOccured)
+    {
+        WAIEventVideoControl* event = new WAIEventVideoControl();
+        event->videoCursorMoveIndex = videoCursorMoveIndex;
+        event->pauseVideo           = _pauseVideo;
+
+        _eventQueue->push(event);
+    }
 }

@@ -53,13 +53,14 @@ public:
         //keyframe culling strategy params:
         // A keyframe is considered redundant if _cullRedundantPerc of the MapPoints it sees, are seen
         // in at least other 3 keyframes (in the same or finer scale)
-        float cullRedundantPerc = 0.9f; //originally it was 0.9
+        float cullRedundantPerc = 0.95f; //originally it was 0.9
     };
 
     ModeOrbSlam2(cv::Mat       cameraMat,
                  cv::Mat       distortionMat,
                  const Params& params,
                  std::string   orbVocFile,
+                 bool          applyMinAccScoreFilter = false,
                  std::string   markerFile = "");
     ~ModeOrbSlam2();
     bool getPose(cv::Mat* pose);
@@ -69,6 +70,7 @@ public:
                                WAIKeyFrameDB* keyFrameDB,
                                unsigned int*  lastRelocFrameId,
                                WAIMap&        waiMap,
+                               bool           applyMinAccScoreFilter = true,
                                bool           relocWithAllKFs = false);
 
     void reset();
@@ -89,9 +91,10 @@ public:
     std::string   getPrintableState();
     TrackingState getTrackingState() { return _state; }
     std::string   getPrintableType();
-    uint32_t      getMapPointCount();
-    uint32_t      getMapPointMatchesCount();
-    uint32_t      getKeyFrameCount();
+    int           getKeyPointCount();
+    int           getMapPointCount();
+    int           getMapPointMatchesCount();
+    int           getKeyFrameCount();
     int           getNMapMatches();
     int           getNumKeyFrames();
     float         poseDifference();
@@ -99,8 +102,8 @@ public:
     void          findMatches(std::vector<cv::Point2f>& vP2D, std::vector<cv::Point3f>& vP3Dw);
 
     std::string getLoopCloseStatus();
-    uint32_t    getLoopCloseCount();
-    uint32_t    getKeyFramesInLoopCloseQueueCount();
+    int         getLoopCloseCount();
+    int         getKeyFramesInLoopCloseQueueCount();
 
     std::vector<WAIMapPoint*>                                 getMapPoints();
     std::vector<WAIMapPoint*>                                 getMatchedMapPoints();
@@ -109,16 +112,6 @@ public:
     std::vector<WAIKeyFrame*>                                 getKeyFrames();
     std::pair<std::vector<cv::Vec3f>, std::vector<cv::Vec2f>> getMatchedCorrespondances();
     std::pair<std::vector<cv::Vec3f>, std::vector<cv::Vec2f>> getCorrespondances();
-
-    void showKeyPointsMatched(const bool flag)
-    {
-        _showKeyPointsMatched = flag;
-    }
-
-    void showKeyPoints(const bool flag)
-    {
-        _showKeyPoints = flag;
-    }
 
     KPextractor* getKPextractor()
     {
@@ -142,6 +135,12 @@ public:
     WAIFrame getCurrentFrame();
 
     bool doMarkerMapPreprocessing(std::string markerFile, cv::Mat& nodeTransform, float markerWidthInM);
+    void decorateVideoWithKeyPoints(cv::Mat& image);
+    void decorateVideoWithKeyPointMatches(cv::Mat& image);
+
+    // marker correction stuff
+    WAIFrame createMarkerFrame(std::string  markerFile,
+                               KPextractor* markerExtractor);
 
 private:
     enum TrackingType
@@ -178,6 +177,7 @@ private:
 
     cv::Mat _pose;
 
+    bool   _applyMinAccScoreFilter;
     bool   _poseSet = false;
     bool   _initialized;
     Params _params;
@@ -267,13 +267,9 @@ private:
     void decorate(cv::Mat& image);
     void calculateMeanReprojectionError();
     void calculatePoseDifference();
-    void decorateVideoWithKeyPoints(cv::Mat& image);
-    void decorateVideoWithKeyPointMatches(cv::Mat& image);
 
     double _meanReprojectionError = -1.0;
     double _poseDifference        = -1.0;
-    bool   _showKeyPoints         = false;
-    bool   _showKeyPointsMatched  = true;
     bool   _showMapPC             = true;
     bool   _showMatchesPC         = true;
     bool   _showLocalMapPC        = false;
@@ -285,12 +281,10 @@ private:
     bool   _allowKfsAsActiveCam   = false;
 
     // marker correction stuff
-    WAIFrame createMarkerFrame(std::string  markerFile,
-                               KPextractor* markerExtractor);
-    bool     findMarkerHomography(WAIFrame&    markerFrame,
-                                  WAIKeyFrame* kfCand,
-                                  cv::Mat&     homography,
-                                  int          minMatches);
+    bool findMarkerHomography(WAIFrame&    markerFrame,
+                              WAIKeyFrame* kfCand,
+                              cv::Mat&     homography,
+                              int          minMatches);
 
     bool _createMarkerMap;
 

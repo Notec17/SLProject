@@ -5,12 +5,12 @@
 #include <list>
 #include <KPextractor.h>
 #include <WAIHelper.h>
-#include <ImageProcessor.h>
+#include <GLSLHessian.h>
 
 class GLSLextractor : public ORB_SLAM2::KPextractor
 {
-    public:
-    GLSLextractor(int w, int h);
+public:
+    GLSLextractor(int w, int h, int nbKeypointsBigSigma, int nbKeypointsSmallSigma, float highThrs, float lowThrs, float bigSigma, float smallSigma);
 
     ~GLSLextractor() {}
 
@@ -21,11 +21,11 @@ class GLSLextractor : public ORB_SLAM2::KPextractor
                     std::vector<cv::KeyPoint>& keypoints,
                     cv::OutputArray            descriptors);
 
-    protected:
+protected:
     std::vector<cv::Point> pattern;
-    cv::Mat old;
-    cv::Mat old2;
-    ImageProcessor imgProc;
+    cv::Mat                images[2];
+    int idx;
+    GLSLHessian            imgProc;
 };
 
 #endif

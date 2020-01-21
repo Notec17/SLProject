@@ -34,7 +34,7 @@
 #include <SLScene.h>
 #include <SLSceneView.h>
 #include <SLTransferFunction.h>
-
+#include <SLGLImGui.h>
 #include <imgui.h>
 #include <ftplib.h>
 
@@ -524,7 +524,8 @@ void AppDemoGui::build(SLScene* s, SLSceneView* sv)
             SLchar m[2550]; // message character array
             m[0] = 0;       // set zero length
 
-            CVCalibration* c        = CVCapture::instance()->activeCalib;
+            CVCamera*      ac       = CVCapture::instance()->activeCamera;
+            CVCalibration* c        = &CVCapture::instance()->activeCamera->calibration;
             CVSize         capSize  = CVCapture::instance()->captureSize;
             CVVideoType    vt       = CVCapture::instance()->videoType();
             SLstring       mirrored = "None";
@@ -538,17 +539,33 @@ void AppDemoGui::build(SLScene* s, SLSceneView* sv)
             sprintf(m + strlen(m), "Video Type   : %s\n", vt == VT_NONE ? "None" : vt == VT_MAIN ? "Main Camera" : vt == VT_FILE ? "File" : "Secondary Camera");
             sprintf(m + strlen(m), "Display size : %d x %d\n", CVCapture::instance()->lastFrame.cols, CVCapture::instance()->lastFrame.rows);
             sprintf(m + strlen(m), "Capture size : %d x %d\n", capSize.width, capSize.height);
-            sprintf(m + strlen(m), "Size Index   : %d\n", c->camSizeIndex());
+            sprintf(m + strlen(m), "Size Index   : %d\n", ac->camSizeIndex());
             sprintf(m + strlen(m), "Mirrored     : %s\n", mirrored.c_str());
             sprintf(m + strlen(m), "Chessboard   : %dx%d (%3.1fmm)\n", c->boardSize().width, c->boardSize().height, c->boardSquareMM());
-            sprintf(m + strlen(m), "Undistorted  : %s\n", c->showUndistorted() && c->state() == CS_calibrated ? "Yes" : "No");
+            sprintf(m + strlen(m), "Undistorted  : %s\n", ac->showUndistorted() ? "Yes" : "No");
+            sprintf(m + strlen(m), "Calibimg size: %d x %d\n", ac->calibration.imageSizeOriginal().width, ac->calibration.imageSizeOriginal().height);
             sprintf(m + strlen(m), "FOV H/V(deg.): %4.1f/%4.1f\n", c->cameraFovHDeg(), c->cameraFovVDeg());
             sprintf(m + strlen(m), "fx,fy        : %4.1f,%4.1f\n", c->fx(), c->fy());
             sprintf(m + strlen(m), "cx,cy        : %4.1f,%4.1f\n", c->cx(), c->cy());
-            sprintf(m + strlen(m), "k1,k2        : %4.2f,%4.2f\n", c->k1(), c->k2());
-            sprintf(m + strlen(m), "p1,p2        : %4.2f,%4.2f\n", c->p1(), c->p2());
+
+            int distortionSize = c->distortion().rows;
+            sprintf(m + strlen(m), "distortion (*10e-2):\n");
+            const float f = 100.f;
+            sprintf(m + strlen(m), "k1,k2        : %4.2f,%4.2f\n", c->k1() * f, c->k2() * f);
+            sprintf(m + strlen(m), "p1,p2        : %4.2f,%4.2f\n", c->p1() * f, c->p2() * f);
+            if (distortionSize >= 8)
+                sprintf(m + strlen(m), "k3,k4,k5,k6  : %4.2f,%4.2f,%4.2f,%4.2f\n", c->k3() * f, c->k4() * f, c->k5() * f, c->k6() * f);
+            else
+                sprintf(m + strlen(m), "k3           : %4.2f\n", c->k3() * f);
+
+            if (distortionSize >= 12)
+                sprintf(m + strlen(m), "s1,s2,s3,s4  : %4.2f,%4.2f,%4.2f,%4.2f\n", c->s1() * f, c->s2() * f, c->s3() * f, c->s4() * f);
+            if (distortionSize >= 14)
+                sprintf(m + strlen(m), "tauX,tauY    : %4.2f,%4.2f\n", c->tauX() * f, c->tauY() * f);
+
             sprintf(m + strlen(m), "Calib. time  : %s\n", c->calibrationTime().c_str());
             sprintf(m + strlen(m), "Calib. state : %s\n", c->stateStr().c_str());
+            sprintf(m + strlen(m), "Num. caps    : %d\n", c->numCapturedImgs());
 
             if (vt != VT_NONE && tracker != nullptr && trackedNode != nullptr)
             {
@@ -1264,34 +1281,14 @@ void AppDemoGui::buildMenuBar(SLScene* s, SLSceneView* sv)
 
             if (ImGui::BeginMenu("Video Sensor"))
             {
-                CVCalibration* ac = capture->activeCalib;
-                CVCalibration* mc = &capture->calibMainCam;
-                CVCalibration* sc = &capture->calibScndCam;
-
-                CVTrackedFeatures* featureTracker = nullptr;
-                if (tracker != nullptr && typeid(*tracker) == typeid(CVTrackedFeatures))
-                    featureTracker = (CVTrackedFeatures*)tracker;
-
-                if (capture->videoType() == VT_MAIN &&
-                    ImGui::BeginMenu("Mirror Main Camera"))
+                CVCamera* ac = capture->activeCamera;
+                if (ImGui::BeginMenu("Mirror Camera"))
                 {
-                    if (ImGui::MenuItem("Horizontally", nullptr, mc->isMirroredH()))
-                        mc->toggleMirrorH();
+                    if (ImGui::MenuItem("Horizontally", nullptr, ac->mirrorH()))
+                        ac->toggleMirrorH();
 
-                    if (ImGui::MenuItem("Vertically", nullptr, mc->isMirroredV()))
-                        mc->toggleMirrorV();
-
-                    ImGui::EndMenu();
-                }
-
-                if (capture->videoType() == VT_SCND &&
-                    ImGui::BeginMenu("Mirror Scnd. Camera", capture->hasSecondaryCamera))
-                {
-                    if (ImGui::MenuItem("Horizontally", nullptr, sc->isMirroredH()))
-                        sc->toggleMirrorH();
-
-                    if (ImGui::MenuItem("Vertically", nullptr, sc->isMirroredV()))
-                        sc->toggleMirrorV();
+                    if (ImGui::MenuItem("Vertically", nullptr, ac->mirrorV()))
+                        ac->toggleMirrorV();
 
                     ImGui::EndMenu();
                 }
@@ -1309,7 +1306,7 @@ void AppDemoGui::buildMenuBar(SLScene* s, SLSceneView* sv)
                                 capture->camSizes[(uint)i].height);
                         if (ImGui::MenuItem(menuStr, nullptr, i == capture->activeCamSizeIndex))
                             if (i != capture->activeCamSizeIndex)
-                                capture->activeCalib->camSizeIndex(i);
+                                ac->camSizeIndex(i);
                     }
                     ImGui::EndMenu();
                 }
@@ -1319,31 +1316,44 @@ void AppDemoGui::buildMenuBar(SLScene* s, SLSceneView* sv)
                     if (ImGui::MenuItem("Start Calibration (Main Camera)"))
                     {
                         s->onLoad(s, sv, SID_VideoCalibrateMain);
-                        showHelpCalibration = true;
+                        showHelpCalibration = false;
                         showInfosScene      = true;
                     }
 
                     if (ImGui::MenuItem("Start Calibration (Scnd. Camera)", nullptr, false, capture->hasSecondaryCamera))
                     {
                         s->onLoad(s, sv, SID_VideoCalibrateScnd);
-                        showHelpCalibration = true;
+                        showHelpCalibration = false;
                         showInfosScene      = true;
                     }
 
-                    if (ImGui::MenuItem("Undistort Image", nullptr, ac->showUndistorted(), ac->state() == CS_calibrated))
+                    if (ImGui::MenuItem("Undistort Image", nullptr, ac->showUndistorted(), ac->calibration.state() == CS_calibrated))
                         ac->showUndistorted(!ac->showUndistorted());
 
-                    if (ImGui::MenuItem("No Tangent Distortion", nullptr, ac->calibZeroTangentDist()))
-                        ac->toggleZeroTangentDist();
+                    if (ImGui::MenuItem("No Tangent Distortion", nullptr, SLApplication::calibrationEstimatorParams.zeroTangentDistortion))
+                        SLApplication::calibrationEstimatorParams.toggleZeroTangentDist();
 
-                    if (ImGui::MenuItem("Fix Aspect Ratio", nullptr, ac->calibFixAspectRatio()))
-                        ac->toggleFixAspectRatio();
+                    if (ImGui::MenuItem("Fix Aspect Ratio", nullptr, SLApplication::calibrationEstimatorParams.fixAspectRatio))
+                        SLApplication::calibrationEstimatorParams.toggleFixAspectRatio();
 
-                    if (ImGui::MenuItem("Fix Principal Point", nullptr, ac->calibFixPrincipalPoint()))
-                        ac->toggleFixPrincipalPoint();
+                    if (ImGui::MenuItem("Fix Principal Point", nullptr, SLApplication::calibrationEstimatorParams.fixPrincipalPoint))
+                        SLApplication::calibrationEstimatorParams.toggleFixPrincipalPoint();
+
+                    if (ImGui::MenuItem("Use rational model", nullptr, SLApplication::calibrationEstimatorParams.calibRationalModel))
+                        SLApplication::calibrationEstimatorParams.toggleRationalModel();
+
+                    if (ImGui::MenuItem("Use tilted model", nullptr, SLApplication::calibrationEstimatorParams.calibTiltedModel))
+                        SLApplication::calibrationEstimatorParams.toggleTiltedModel();
+
+                    if (ImGui::MenuItem("Use thin prism model", nullptr, SLApplication::calibrationEstimatorParams.calibThinPrismModel))
+                        SLApplication::calibrationEstimatorParams.toggleThinPrismModel();
 
                     ImGui::EndMenu();
                 }
+
+                CVTrackedFeatures* featureTracker = nullptr;
+                if (tracker != nullptr && typeid(*tracker) == typeid(CVTrackedFeatures))
+                    featureTracker = (CVTrackedFeatures*)tracker;
 
                 if (tracker != nullptr)
                     if (ImGui::MenuItem("Draw Detection", nullptr, tracker->drawDetection()))

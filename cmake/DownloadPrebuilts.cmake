@@ -67,7 +67,7 @@ if("${SYSTEM_NAME_UPPER}" STREQUAL "LINUX")
     set(g2o_LIBS ${g2o_LINK_LIBS})
 
 elseif("${SYSTEM_NAME_UPPER}" STREQUAL "WINDOWS") #----------------------------
-    set(OpenCV_VERSION "4.1.1")
+    set(OpenCV_VERSION "4.1.2")
     set(OpenCV_PREBUILT_DIR "win64_opencv_${OpenCV_VERSION}")
     set(OpenCV_DIR "${PREBUILT_PATH}/${OpenCV_PREBUILT_DIR}")
     set(OpenCV_LINK_DIR "${OpenCV_DIR}/lib")

@@ -17,7 +17,6 @@
 #include <SL.h>
 #include <SLApplication.h>
 #include <SLScene.h>
-
 #include <utility>
 
 //-----------------------------------------------------------------------------
@@ -47,19 +46,28 @@ SLstring            SLApplication::gitDate       = SL_GIT_DATE;
 SLint               SLApplication::dpi           = 0;
 map<string, string> SLApplication::deviceParameter;
 
+CVCalibrationEstimatorParams SLApplication::calibrationEstimatorParams;
+CVCalibrationEstimator*      SLApplication::calibrationEstimator = nullptr;
+SLstring                     SLApplication::calibIniPath;
+SLstring                     SLApplication::calibFilePath;
+
 //! SLApplication::configPath is overwritten in slCreateAppAndScene.
 SLstring                    SLApplication::configPath   = SLstring(SL_PROJECT_ROOT) + "/data/config/";
 SLstring                    SLApplication::externalPath = SLstring(SL_PROJECT_ROOT) + "/data/config/";
 SLSceneID                   SLApplication::sceneID      = SID_Empty;
 deque<function<void(void)>> SLApplication::jobsToBeThreaded;
 deque<function<void(void)>> SLApplication::jobsToFollowInMain;
-atomic<bool>
-  SLApplication::jobIsRunning(false);
-string       SLApplication::_jobProgressMsg = "";
-atomic<int>  SLApplication::_jobProgressNum(0);
-atomic<int>  SLApplication::_jobProgressMax(0);
-mutex        SLApplication::_jobMutex;
-HighResTimer SLApplication::_timer;
+atomic<bool>                SLApplication::jobIsRunning(false);
+string                      SLApplication::_jobProgressMsg = "";
+atomic<int>                 SLApplication::_jobProgressNum(0);
+atomic<int>                 SLApplication::_jobProgressMax(0);
+mutex                       SLApplication::_jobMutex;
+HighResTimer                SLApplication::_timer;
+
+const string SLApplication::CALIB_FTP_HOST = "pallas.bfh.ch:21";
+const string SLApplication::CALIB_FTP_USER = "upload";
+const string SLApplication::CALIB_FTP_PWD  = "FaAdbD3F2a";
+const string SLApplication::CALIB_FTP_DIR  = "calibrations";
 
 //-----------------------------------------------------------------------------
 //! Application and Scene creation function
