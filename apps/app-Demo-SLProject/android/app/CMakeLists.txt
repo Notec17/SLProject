@@ -133,6 +133,7 @@ file(
         ${APK_ASSETS}/config
     )
 
+message("APK_ASSETS" ${APK_ASSETS})
 file(COPY ${FONTS}          DESTINATION ${APK_ASSETS}/fonts)
 file(COPY ${TEXTURES}       DESTINATION ${APK_ASSETS}/textures)
 file(COPY ${VIDEOS}         DESTINATION ${APK_ASSETS}/videos)

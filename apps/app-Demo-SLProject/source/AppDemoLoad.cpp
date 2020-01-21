@@ -2643,6 +2643,10 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         cam1->clipNear(0.1f);
         cam1->clipFar(1000.0f);
         cam1->focalDist(150);
+        cam1->background().texture(videoTexture);
+
+        // Turn on main video
+        CVCapture::instance()->videoType(VT_MAIN);
 
         // Create directional light for the sun light
         SLLightDirect* light = new SLLightDirect(5.0f);
@@ -2652,10 +2656,9 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         light->attenuation(1, 0, 0);
         light->translation(0, 10, 0);
         light->lookAt(10, 0, 10);
-        cam1->background().texture(videoTexture);
 
-        // Turn on main video
-        CVCapture::instance()->videoType(VT_MAIN);
+        // Let the sun be rotated by time and location
+        SLApplication::devLoc.sunLightNode(light);
 
         SLAssimpImporter importer;
         SLNode*          TheaterAndTempel = importer.load("DAE/AugustaRaurica/Tempel-Theater-01.dae");
@@ -2734,6 +2737,9 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         light->translation(0, 10, 0);
         light->lookAt(10, 0, 10);
 
+        // Let the sun be rotated by time and location
+        SLApplication::devLoc.sunLightNode(light);
+
         SLAssimpImporter importer;
         SLNode*          theater = importer.load("DAE/Aventicum/Aventicum01.dae");
 
@@ -2756,7 +2762,7 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
 
         //initialize sensor stuff
         SLApplication::devLoc.originLLA(46.881013677, 7.042621953, 442.0);  // Zentrum Amphitheater
-        SLApplication::devLoc.defaultLLA(46.881210148, 7.043767122, 450.0); // Ecke Vorplatz Ost
+        SLApplication::devLoc.defaultLLA(46.881210148, 7.043767122, 442.0 + 1.7); // Ecke Vorplatz Ost
         SLApplication::devLoc.locMaxDistanceM(1000.0f);                     // Max. Distanz. zum Nullpunkt
         SLApplication::devLoc.improveOrigin(false);                         // Keine autom. Verbesserung vom Origin
         SLApplication::devLoc.useOriginAltitude(true);

@@ -186,23 +186,28 @@ SLbool SLDeviceLocation::calculateSolarAngles(SLdouble latDEG,
     if (!_hasOrigin) return false;
 
     std::time_t t = std::time(nullptr);
-    tm          ut;
+    tm          ut{}, lt{};
+
     memcpy(&ut, std::gmtime(&t), sizeof(tm));
-    tm lt;
     memcpy(&lt, std::localtime(&t), sizeof(tm));
+
+    ut.tm_year += 1900;
+    lt.tm_year += 1900;
+    ut.tm_mon++;
+    lt.tm_mon++;
 
     SL_LOG("\n");
     SL_LOG("Universal time  : %02d.%02d.%02d %02d:%02d:%02d\n",
            ut.tm_mday,
            ut.tm_mon,
-           ut.tm_year + 1900,
+           ut.tm_year,
            ut.tm_hour,
            ut.tm_min,
            ut.tm_sec);
     SL_LOG("Local time      : %02d.%02d.%02d %02d:%02d:%02d\n",
            lt.tm_mday,
            lt.tm_mon,
-           lt.tm_year + 1900,
+           lt.tm_year,
            lt.tm_hour,
            lt.tm_min,
            lt.tm_sec);
@@ -212,8 +217,8 @@ SLbool SLDeviceLocation::calculateSolarAngles(SLdouble latDEG,
     SLint    result;
 
     //enter required input values into SPA structure
-    spa.year      = lt.tm_year + 1900;
-    spa.month     = lt.tm_mon + 1;
+    spa.year      = lt.tm_year;
+    spa.month     = lt.tm_mon;
     spa.day       = lt.tm_mday;
     spa.hour      = lt.tm_hour;
     spa.minute    = lt.tm_min;
