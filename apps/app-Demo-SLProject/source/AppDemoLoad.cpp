@@ -1518,7 +1518,14 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         SLTransformKeyframe* k3 = track->createNodeKeyframe(5.0f);
         k3->translation(SLVec3f(0.3f, 0.2f, -0.3f));
 
-        SLMaterial* pink = new SLMaterial("cream", SLCol4f(1, 0.35f, 0.65f), SLCol4f::BLACK, 100.f, 0.f, 0.f, 1.f, s->programs()[SP_perPixBlinn]);
+        SLMaterial* pink = new SLMaterial("cream",
+                                          SLCol4f(1, 0.35f, 0.65f),
+                                          SLCol4f::BLACK,
+                                          100.f,
+                                          0.f,
+                                          0.f,
+                                          1.f,
+                                          s->programs()[SP_perPixBlinn]);
 
         // create wall polygons
         SLfloat pL = -0.99f, pR = 0.99f; // left/right
@@ -2592,7 +2599,7 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         axis->rotate(-90, 1, 0, 0);
 
         SLMaterial* yellow = new SLMaterial("mY", SLCol4f(1, 1, 0, 0.5f));
-        SLNode* box2m = new SLNode(new SLBox(0,0,0,2,2,2,"Box2m", yellow));
+        SLNode*     box2m  = new SLNode(new SLBox(0, 0, 0, 2, 2, 2, "Box2m", yellow));
 
         SLNode* scene = new SLNode("Scene");
         scene->addChild(light);
@@ -2681,10 +2688,10 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         scene->addChild(cam1);
 
         //initialize sensor stuff
-        SLApplication::devLoc.originLLA(47.53319, 7.72207, 442.0);          // Zentrum Theater 3
-        SLApplication::devLoc.defaultLLA(47.53294, 7.72084, 446.0 + 1.7);   // Eingangtor Tempel
-        SLApplication::devLoc.locMaxDistanceM(1000.0f);                     // Max. Distanz. zum Nullpunkt
-        SLApplication::devLoc.improveOrigin(false);                         // Keine autom. Verbesserung vom Origin
+        SLApplication::devLoc.originLLA(47.53319, 7.72207, 442.0);        // Zentrum Theater 3
+        SLApplication::devLoc.defaultLLA(47.53294, 7.72084, 446.0 + 1.7); // Eingangtor Tempel
+        SLApplication::devLoc.locMaxDistanceM(1000.0f);                   // Max. Distanz. zum Nullpunkt
+        SLApplication::devLoc.improveOrigin(false);                       // Keine autom. Verbesserung vom Origin
         SLApplication::devLoc.useOriginAltitude(true);
         SLApplication::devLoc.hasOrigin(true);
         SLApplication::devRot.zeroYawAtStart(false);
@@ -2761,10 +2768,10 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         scene->addChild(cam1);
 
         //initialize sensor stuff
-        SLApplication::devLoc.originLLA(46.881013677, 7.042621953, 442.0);  // Zentrum Amphitheater
+        SLApplication::devLoc.originLLA(46.881013677, 7.042621953, 442.0);        // Zentrum Amphitheater
         SLApplication::devLoc.defaultLLA(46.881210148, 7.043767122, 442.0 + 1.7); // Ecke Vorplatz Ost
-        SLApplication::devLoc.locMaxDistanceM(1000.0f);                     // Max. Distanz. zum Nullpunkt
-        SLApplication::devLoc.improveOrigin(false);                         // Keine autom. Verbesserung vom Origin
+        SLApplication::devLoc.locMaxDistanceM(1000.0f);                           // Max. Distanz. zum Nullpunkt
+        SLApplication::devLoc.improveOrigin(false);                               // Keine autom. Verbesserung vom Origin
         SLApplication::devLoc.useOriginAltitude(true);
         SLApplication::devLoc.hasOrigin(true);
         SLApplication::devRot.zeroYawAtStart(false);
@@ -2798,7 +2805,12 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         SLGLProgram* sp2 = new SLGLGenericProgram("RefractReflect.vert", "RefractReflect.frag");
 
         // Create cube mapping texture
-        SLGLTexture* tex1 = new SLGLTexture("MuttenzerBox+X0512_C.png", "MuttenzerBox-X0512_C.png", "MuttenzerBox+Y0512_C.png", "MuttenzerBox-Y0512_C.png", "MuttenzerBox+Z0512_C.png", "MuttenzerBox-Z0512_C.png");
+        SLGLTexture* tex1 = new SLGLTexture("MuttenzerBox+X0512_C.png",
+                                            "MuttenzerBox-X0512_C.png",
+                                            "MuttenzerBox+Y0512_C.png",
+                                            "MuttenzerBox-Y0512_C.png",
+                                            "MuttenzerBox+Z0512_C.png",
+                                            "MuttenzerBox-Z0512_C.png");
 
         SLCol4f lightEmisRGB(7.0f, 7.0f, 7.0f);
         SLCol4f grayRGB(0.75f, 0.75f, 0.75f);
