@@ -2638,18 +2638,18 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
     }
     else if (SLApplication::sceneID == SID_VideoAugustaRaurica) //.......................................
     {
-        s->name("Christoffel Tower AR");
-        s->info("Augmented Reality Christoffel Tower");
+        s->name("Augusta Raurica AR");
+        s->info("Augmented Reality for Augusta Raurica");
 
         // Create video texture on global pointer updated in AppDemoVideo
         videoTexture = new SLGLTexture("LiveVideoError.png", GL_LINEAR, GL_LINEAR);
 
         SLCamera* cam1 = new SLCamera("Camera 1");
-        cam1->translation(0, 2, 0);
-        cam1->lookAt(-10, 2, 0);
+        cam1->translation(0, 50, -150);
+        cam1->lookAt(0, 0, 0);
         cam1->clipNear(0.1f);
-        cam1->clipFar(500.0f);
-        cam1->setInitialState();
+        cam1->clipFar(1000.0f);
+        cam1->focalDist(150);
         cam1->background().texture(videoTexture);
 
         // Turn on main video
@@ -2661,64 +2661,14 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         light->diffuse(SLCol4f(1, 1, 1));
         light->specular(SLCol4f(1, 1, 1));
         light->attenuation(1, 0, 0);
+        light->translation(0, 10, 0);
+        light->lookAt(10, 0, 10);
 
         // Let the sun be rotated by time and location
         SLApplication::devLoc.sunLightNode(light);
 
         SLAssimpImporter importer;
-        SLNode*          bern = importer.load("FBX/Christoffel/Bern-Bahnhofsplatz.fbx");
-
-        // Make city transparent
-        SLNode* UmgD = bern->findChild<SLNode>("Umgebung-Daecher");
-        if (!UmgD) SL_EXIT_MSG("Node: Umgebung-Daecher not found!");
-        for (auto mesh : UmgD->meshes())
-        {
-            mesh->mat()->kt(0.5f);
-            mesh->mat()->ambient(SLCol4f(0.3f, 0.3f, 0.3f));
-            mesh->init(UmgD); // reset the correct hasAlpha flag
-        }
-
-        SLNode* UmgF = bern->findChild<SLNode>("Umgebung-Fassaden");
-        if (!UmgF) SL_EXIT_MSG("Node: Umgebung-Fassaden not found!");
-        for (auto mesh : UmgF->meshes())
-        {
-            mesh->mat()->kt(0.5f);
-            mesh->mat()->ambient(SLCol4f(0.3f, 0.3f, 0.3f));
-            mesh->init(UmgF); // reset the correct hasAlpha flag
-        }
-
-        SLNode* ChrA = bern->findChild<SLNode>("Christoffel-Aussen");
-        if (!ChrA) SL_EXIT_MSG("Node: Christoffel-Aussen not found!");
-        for (auto mesh : ChrA->meshes())
-        {
-            mesh->mat()->ambient(SLCol4f(0.3f, 0.3f, 0.3f));
-        }
-
-        // Hide some objects
-        bern->findChild<SLNode>("Umgebung-Daecher")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Umgebung-Fassaden")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Baldachin-Glas")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Baldachin-Stahl")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Mauer-Wand")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Mauer-Turm")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Mauer-Dach")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Mauer-Weg")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Boden")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Graben-Mauern")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Graben-Bruecken")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Graben-Grass")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Graben-Turm-Dach")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Graben-Turm-Fahne")->drawBits()->set(SL_DB_HIDDEN, true);
-        bern->findChild<SLNode>("Graben-Turm-Stein")->drawBits()->set(SL_DB_HIDDEN, true);
-
-        // Set ambient on all child nodes
-        for (auto node : bern->children())
-        {
-            for (auto mesh : node->meshes())
-            {
-                mesh->mat()->ambient(SLCol4f(0.3f, 0.3f, 0.3f));
-            }
-        }
+        SLNode*          TheaterAndTempel = importer.load("DAE/AugustaRaurica/Tempel-Theater-01.dae");
 
         // Add axis object a world origin (Loeb Ecke)
         SLNode* axis = new SLNode(new SLCoordAxis(), "Axis Node");
@@ -2726,21 +2676,22 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         axis->scale(10);
         axis->rotate(-90, 1, 0, 0);
 
-        SLMaterial* yellow = new SLMaterial("mY", SLCol4f(1, 1, 0, 0.5f));
-        SLNode*     box2m  = new SLNode(new SLBox(0, 0, 0, 2, 2, 2, "Box2m", yellow));
+        // Set some ambient light
+        for (auto child : TheaterAndTempel->children())
+            for (auto mesh : child->meshes())
+                mesh->mat()->ambient(SLCol4f(0.25f, 0.23f, 0.15f));
 
         SLNode* scene = new SLNode("Scene");
         scene->addChild(light);
         scene->addChild(axis);
-        scene->addChild(box2m);
-        scene->addChild(bern);
+        scene->addChild(TheaterAndTempel);
         scene->addChild(cam1);
 
         //initialize sensor stuff
-        SLApplication::devLoc.originLLA(46.947629, 7.440754, 442.0);        // Loeb Ecken
-        SLApplication::devLoc.defaultLLA(46.948551, 7.440093, 442.0 + 1.7); // Bahnhof Ausgang in Augenhöhe
-        SLApplication::devLoc.locMaxDistanceM(1000.0f);                     // Max. Distanz. zum Loeb Ecken
-        SLApplication::devLoc.improveOrigin(false);                         // Keine autom. Verbesserung vom Origin
+        SLApplication::devLoc.originLLA(47.53319, 7.72207, 442.0);        // Zentrum Theater 3
+        SLApplication::devLoc.defaultLLA(47.53294, 7.72084, 446.0 + 1.7); // Eingangtor Tempel
+        SLApplication::devLoc.locMaxDistanceM(1000.0f);                   // Max. Distanz. zum Nullpunkt
+        SLApplication::devLoc.improveOrigin(false);                       // Keine autom. Verbesserung vom Origin
         SLApplication::devLoc.useOriginAltitude(true);
         SLApplication::devLoc.hasOrigin(true);
         SLApplication::devRot.zeroYawAtStart(false);
@@ -2796,7 +2747,9 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         SLApplication::devLoc.sunLightNode(light);
 
         SLAssimpImporter importer;
-        SLNode*          TheaterAndTempel = importer.load("DAE/AugustaRaurica/Tempel-Theater-02.dae");
+        //SLNode*          TheaterAndTempel = importer.load("DAE/AugustaRaurica/Tempel-Theater-02.dae");
+        SLNode* TheaterAndTempel = importer.load("GLTF/AugustaRaurica/Tempel-Theater-02.gltf");
+        //SLNode*          TheaterAndTempel = importer.load("FBX/AugustaRaurica/Tempel-Theater-02.fbx");
 
         // Add axis object a world origin (Loeb Ecke)
         SLNode* axis = new SLNode(new SLCoordAxis(), "Axis Node");

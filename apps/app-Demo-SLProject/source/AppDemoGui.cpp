@@ -209,6 +209,7 @@ int ftpCallbackXfer(off64_t xfered, void* arg)
  See also the comments on SLGLImGui.
  */
 void AppDemoGui::build(SLScene* s, SLSceneView* sv)
+
 {
     ///////////////////////////////////
     // Show modeless fullscreen dialogs
