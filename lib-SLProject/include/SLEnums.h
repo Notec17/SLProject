@@ -125,6 +125,7 @@ enum SLSceneID
     SID_VideoTextureFile,
     SID_VideoChristoffel,
     SID_VideoAugustaRaurica,
+    SID_VideoAugustaRaurica2,
     SID_VideoAventicum,
     SID_VideoCalibrateMain,
     SID_VideoCalibrateScnd,

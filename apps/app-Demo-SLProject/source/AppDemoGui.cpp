@@ -1096,6 +1096,8 @@ void AppDemoGui::buildMenuBar(SLScene* s, SLSceneView* sv)
                         s->onLoad(s, sv, SID_VideoChristoffel);
                     if (ImGui::MenuItem("Augusta Raurica AR (Main)", nullptr, sid == SID_VideoAugustaRaurica))
                         s->onLoad(s, sv, SID_VideoAugustaRaurica);
+                    if (ImGui::MenuItem("Augusta Raurica AR2 (Main)", nullptr, sid == SID_VideoAugustaRaurica2))
+                        s->onLoad(s, sv, SID_VideoAugustaRaurica2);
                     if (ImGui::MenuItem("Aventicum AR (Main)", nullptr, sid == SID_VideoAventicum))
                         s->onLoad(s, sv, SID_VideoAventicum);
                     ImGui::EndMenu();
