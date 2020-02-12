@@ -13,7 +13,7 @@ set(headers
     ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIMapPoint.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIOrbVocabulary.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIMath.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIModeOrbSlam2.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/WAISlam.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/Converter.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/Initializer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/LocalMapping.h
@@ -26,12 +26,6 @@ set(headers
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/ORBVocabulary.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/PnPsolver.h
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/Sim3Solver.h
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/FileLog.h
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/Logger.h
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/LogLevelDebug.h
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/LogLevelWarn.h
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/LogLevelInfo.h
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/LogLevelError.h
     )
 
 set(sources
@@ -42,7 +36,7 @@ set(sources
     ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIMap.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIMapPoint.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIOrbVocabulary.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/source/WAIModeOrbSlam2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/WAISlam.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/Converter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/Initializer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/LocalMapping.cpp
@@ -53,15 +47,13 @@ set(sources
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/SURFextractor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/PnPsolver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/OrbSlam/Sim3Solver.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/source/logging/FileLog.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/source/logging/Logger.cpp
     )
 
 # Group source files (for visual studio ide)
 source_group_by_path("${CMAKE_CURRENT_SOURCE_DIR}/source" "\\\\.h$|\\\\.hpp$" "Header Files" ${headers})
 source_group_by_path("${CMAKE_CURRENT_SOURCE_DIR}/source" "\\\\.cpp$|\\\\.c$|\\\\.h$|\\\\.hpp$" "Source Files" ${sources})
 
-add_library(${target} 
+add_library(${target}
 #SHARED
     ${headers}
     ${sources}

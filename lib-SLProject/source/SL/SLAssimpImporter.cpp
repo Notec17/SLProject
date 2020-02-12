@@ -337,7 +337,7 @@ SLNode* SLAssimpImporter::load(SLstring    file,           //!< File with path o
             meshMap[i] = mesh;
         }
         else
-            SL_LOG("SLAsssimpImporter::load failed: %s\nin path: %s\n",
+            SL_LOG("SLAsssimpImporter::load failed: %s\nin path: %s",
                    file.c_str(),
                    modelPath.c_str());
     }
@@ -790,7 +790,7 @@ SLMesh* SLAssimpImporter::loadMesh(aiMesh* mesh)
         (numLines && (numTriangles || numPoints)) ||
         (numPoints && (numLines || numTriangles)))
     {
-        SL_LOG("SLAssimpImporter::loadMesh:  Mesh contains multiple primitive types: %s, Lines: %d, Points: %d\n",
+        SL_LOG("SLAssimpImporter::loadMesh:  Mesh contains multiple primitive types: %s, Lines: %d, Points: %d",
                mesh->mName.C_Str(),
                numLines,
                numPoints);
@@ -803,7 +803,7 @@ SLMesh* SLAssimpImporter::loadMesh(aiMesh* mesh)
 
     if (numPolygons > 0)
     {
-        SL_LOG("SLAssimpImporter::loadMesh:  Mesh contains polygons: %s\n",
+        SL_LOG("SLAssimpImporter::loadMesh:  Mesh contains polygons: %s",
                mesh->mName.C_Str());
         return nullptr;
     }
@@ -811,7 +811,7 @@ SLMesh* SLAssimpImporter::loadMesh(aiMesh* mesh)
     // We only load meshes that contain triangles or lines
     if (mesh->mNumVertices == 0)
     {
-        SL_LOG("SLAssimpImporter::loadMesh:  Mesh has no vertices: %s\n",
+        SL_LOG("SLAssimpImporter::loadMesh:  Mesh has no vertices: %s",
                mesh->mName.C_Str());
         return nullptr;
     }
@@ -819,7 +819,7 @@ SLMesh* SLAssimpImporter::loadMesh(aiMesh* mesh)
     // We only load meshes that contain triangles or lines
     if (numTriangles == 0 && numLines == 0 && numPoints == 0)
     {
-        SL_LOG("SLAssimpImporter::loadMesh:  Mesh has has no triangles nor lines nor points: %s\n",
+        SL_LOG("SLAssimpImporter::loadMesh:  Mesh has has no triangles nor lines nor points: %s",
                mesh->mName.C_Str());
         return nullptr;
     }
@@ -994,7 +994,7 @@ SLMesh* SLAssimpImporter::loadMesh(aiMesh* mesh)
             }
             else
             {
-                SL_LOG("Failed to load joint of skeleton in SLAssimpImporter::loadMesh: %s\n",
+                SL_LOG("Failed to load joint of skeleton in SLAssimpImporter::loadMesh: %s",
                        joint->mName.C_Str());
                 //return nullptr;
             }

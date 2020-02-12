@@ -28,9 +28,7 @@ CVTrackedChessboard::CVTrackedChessboard()
 {
     if (!loadCalibParams())
     {
-        Utils::exitMsg("CVTrackedChessboard: could not load calibration parameter",
-                       __LINE__,
-                       __FILE__);
+        Utils::exitMsg("SLProject", "CVTrackedChessboard: could not load calibration parameter", __LINE__, __FILE__);
     }
 
     calcBoardCorners3D(_boardSize,
@@ -47,7 +45,7 @@ bool CVTrackedChessboard::loadCalibParams()
     fs.open(fullCalibIniFile, FileStorage::READ);
     if (!fs.isOpened())
     {
-        Utils::log("Could not open the calibration parameter file: %s\n", fullCalibIniFile.c_str());
+        Utils::log("Could not open the calibration parameter file: %s", fullCalibIniFile.c_str());
         return false;
     }
 

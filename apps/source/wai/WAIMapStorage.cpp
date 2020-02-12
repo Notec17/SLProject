@@ -213,8 +213,8 @@ bool WAIMapStorage::saveMap(WAIMap*     waiMap,
 }
 
 bool WAIMapStorage::loadMap(WAIMap*        waiMap,
-                            WAIKeyFrameDB* kfDB,
                             SLNode*        mapNode,
+                            ORBVocabulary* voc,
                             std::string    path,
                             bool           loadImgs,
                             bool           fixKfsAndMPts)
@@ -331,7 +331,7 @@ bool WAIMapStorage::loadMap(WAIMap*        waiMap,
                                              keyPtsUndist.size(),
                                              keyPtsUndist,
                                              featureDescriptors,
-                                             WAIOrbVocabulary::get(),
+                                             voc,
                                              nScaleLevels,
                                              scaleFactor,
                                              vScaleFactor,
@@ -341,9 +341,7 @@ bool WAIMapStorage::loadMap(WAIMap*        waiMap,
                                              nMinY,
                                              nMaxX,
                                              nMaxY,
-                                             K,
-                                             kfDB,
-                                             waiMap);
+                                             K);
 
         if (imgDir != "")
         {
@@ -418,7 +416,7 @@ bool WAIMapStorage::loadMap(WAIMap*        waiMap,
         cv::Mat mWorldPos; //has to be here!
         (*it)["mWorldPos"] >> mWorldPos;
 
-        WAIMapPoint* newPt = new WAIMapPoint(id, mWorldPos, waiMap, fixKfsAndMPts);
+        WAIMapPoint* newPt = new WAIMapPoint(id, mWorldPos, fixKfsAndMPts);
         vector<int>  observingKfIds;
         (*it)["observingKfIds"] >> observingKfIds;
         vector<int> corrKpIndices;
@@ -548,7 +546,6 @@ bool WAIMapStorage::loadMap(WAIMap*        waiMap,
     for (WAIKeyFrame* kf : keyFrames)
     {
         waiMap->AddKeyFrame(kf);
-        kfDB->add(kf);
 
         //Add keyframe with id 0 to this vector. Otherwise RunGlobalBundleAdjustment in LoopClosing after loop was detected crashes.
         if (kf->mnId == 0)

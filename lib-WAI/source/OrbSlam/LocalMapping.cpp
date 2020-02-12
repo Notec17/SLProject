@@ -116,6 +116,7 @@ void LocalMapping::Run()
                 }
             }
 
+            //(LuluSLAM refactor) Must be change back or move somewhere else later
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
 
             if (stopRequested())
@@ -252,6 +253,9 @@ void LocalMapping::ProcessNewKeyFrame()
 
     // Insert Keyframe in Map
     mpMap->AddKeyFrame(mpCurrentKeyFrame);
+    //TODO Now, when a keyframe is added to the map, it is added to the 
+    // keyFrameDatabase too. Before it was not the case. Why wasn't it added
+    // to the kfDB here?
 }
 
 void LocalMapping::MapPointCulling()
@@ -273,7 +277,6 @@ void LocalMapping::MapPointCulling()
     while (lit != mlpRecentAddedMapPoints.end())
     {
         WAIMapPoint* pMP = *lit;
-
         if (pMP->isBad())
         {
             lit = mlpRecentAddedMapPoints.erase(lit);
@@ -283,12 +286,14 @@ void LocalMapping::MapPointCulling()
         {
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
+            mpMap->EraseMapPoint(pMP);
             mapPointsCulled++;
         }
         else if (((int)nCurrentKFid - (int)pMP->mnFirstKFid) >= 2 && pMP->Observations() <= cnThObs)
         {
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
+            mpMap->EraseMapPoint(pMP);
             mapPointsCulled++;
         }
         else if (((int)nCurrentKFid - (int)pMP->mnFirstKFid) >= 3)
@@ -531,7 +536,7 @@ void LocalMapping::CreateNewMapPoints()
                 continue;
 
             // Triangulation is succesfull
-            WAIMapPoint* pMP = new WAIMapPoint(x3D, mpCurrentKeyFrame, mpMap);
+            WAIMapPoint* pMP = new WAIMapPoint(x3D, mpCurrentKeyFrame);
 
             mpCurrentKeyFrame->AddMapPoint(pMP, idx1);
             pKF2->AddMapPoint(pMP, idx2);
@@ -587,7 +592,7 @@ void LocalMapping::SearchInNeighbors()
     {
         WAIKeyFrame* pKFi = *vit;
 
-        matcher.Fuse(pKFi, vpMapPointMatches);
+        matcher.Fuse(mpMap, pKFi, vpMapPointMatches);
     }
 
     // Search matches by projection from target KFs in current KF
@@ -612,7 +617,7 @@ void LocalMapping::SearchInNeighbors()
         }
     }
 
-    matcher.Fuse(mpCurrentKeyFrame, vpFuseCandidates);
+    matcher.Fuse(mpMap, mpCurrentKeyFrame, vpFuseCandidates);
 
     // Update points
     vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
@@ -803,6 +808,7 @@ void LocalMapping::KeyFrameCulling()
         if (nRedundantObservations > _cullRedundantPerc * nMPs)
         {
             pKF->SetBadFlag();
+            mpMap->EraseKeyFrame(pKF);
         }
     }
 }

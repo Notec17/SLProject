@@ -1,12 +1,14 @@
 #include "MapCreator.h"
 #include <memory>
 #include <CVCamera.h>
+#include <GLSLextractor.h>
+#include <FeatureExtractorFactory.h>
 
-MapCreator::MapCreator(std::string erlebARDir, std::string configFile)
+MapCreator::MapCreator(std::string erlebARDir, std::string configFile, std::string vocFile)
   : _erlebARDir(Utils::unifySlashes(erlebARDir))
 {
     _calibrationsDir = _erlebARDir + "calibrations/";
-    _vocFile         = _erlebARDir + "../voc/ORBvoc.bin";
+    _vocFile         = vocFile;
     _outputDir       = _erlebARDir + "MapCreator/";
     if (!Utils::dirExists(_outputDir))
         Utils::makeDir(_outputDir);
@@ -19,6 +21,17 @@ MapCreator::MapCreator(std::string erlebARDir, std::string configFile)
     //scan erlebar directory and config file, collect everything that is enabled in the config file and
     //check that all files (video and calibration) exist.
     loadSites(erlebARDir, configFile);
+
+    //init keypoint extractors
+    //TODO(lulu) create extractor depending on video resolution especially if different for each video!
+    FeatureExtractorFactory factory;
+    _kpExtractor = factory.make(7, {640, 320});
+    //_kpIniExtractor    = factory.make(8, {640, 360});
+    //_kpMarkerExtractor = factory.make(8, {640, 360});
+}
+
+MapCreator::~MapCreator()
+{
 }
 
 void MapCreator::loadSites(const std::string& erlebARDir, const std::string& configFile)
@@ -28,9 +41,13 @@ void MapCreator::loadSites(const std::string& erlebARDir, const std::string& con
         WAI_DEBUG("MapCreator: loading sites:");
         //parse config file
         cv::FileStorage fs;
+        std::cout << "erlebBarDir " << erlebARDir << std::endl;
+        std::cout << "configFile " << configFile << std::endl
+                  << std::endl;
+
         fs.open(configFile, cv::FileStorage::READ);
         if (!fs.isOpened())
-            throw std::runtime_error("Could not open configFile: " + configFile);
+            throw std::runtime_error("MapCreator::loadSites: Could not open configFile: " + configFile);
 
         //helper for areas that have been enabled
         std::set<Area> enabledAreas;
@@ -51,7 +68,7 @@ void MapCreator::loadSites(const std::string& erlebARDir, const std::string& con
                 (*itAreas)["enabled"] >> enabled;
                 if (enabled)
                 {
-                    WAI_DEBUG("enabling %s %s", location.c_str(), area.c_str());
+                    WAI_DEBUG("MapCreator::loadSites: enabling %s %s", location.c_str(), area.c_str());
                     Areas&     areas      = _erlebAR[location];
                     AreaConfig areaConfig = {};
                     areaConfig.videos     = Videos();
@@ -66,7 +83,7 @@ void MapCreator::loadSites(const std::string& erlebARDir, const std::string& con
                         if (!Utils::fileExists(areaConfig.markerFile))
                             throw std::runtime_error("Marker file does not exist: " + areaConfig.markerFile);
 
-                        WAI_DEBUG("%s %s uses markerfile %s", location.c_str(), area.c_str(), areaConfig.markerFile.c_str());
+                        WAI_DEBUG("MapCreator::loadSites: %s %s uses markerfile %s", location.c_str(), area.c_str(), areaConfig.markerFile.c_str());
                     }
 
                     //insert empty Videos vector
@@ -93,24 +110,24 @@ void MapCreator::loadSites(const std::string& erlebARDir, const std::string& con
                     videoAndCalib.videoFile = erlebARDirUnified + "locations/" + location + "/" + area + "/" + "videos/" + name;
 
                     if (!Utils::fileExists(videoAndCalib.videoFile))
-                        throw std::runtime_error("Video file does not exist: " + videoAndCalib.videoFile);
+                        throw std::runtime_error("MapCreator::loadSites: Video file does not exist: " + videoAndCalib.videoFile);
 
                     //check if calibration file exists
                     SlamVideoInfos slamVideoInfos;
 
                     if (!extractSlamVideoInfosFromFileName(name, &slamVideoInfos))
-                        throw std::runtime_error("Could not extract slam video infos: " + name);
+                        throw std::runtime_error("MapCreator::loadSites: Could not extract slam video infos: " + name);
 
                     // construct calibrations file name and check if it exists
                     std::string calibFile = "camCalib_" + slamVideoInfos.deviceString + "_main.xml";
 
                     //videoAndCalib.calibFile = erlebARDirUnified + "../calibrations/" + "camCalib_" + slamVideoInfos.deviceString + "_main.xml";
                     if (!Utils::fileExists(_calibrationsDir + calibFile))
-                        throw std::runtime_error("Calibration file does not exist: " + _calibrationsDir + calibFile);
+                        throw std::runtime_error("MapCreator::loadSites: Calibration file does not exist: " + _calibrationsDir + calibFile);
 
                     //load calibration file and check for aspect ratio
-                    if (!videoAndCalib.calibration.load(_calibrationsDir, calibFile))
-                        throw std::runtime_error("Could not load calibration file: " + _calibrationsDir + calibFile);
+                    if (!videoAndCalib.calibration.load(_calibrationsDir, calibFile, true))
+                        throw std::runtime_error("MapCreator::loadSites: Could not load calibration file: " + _calibrationsDir + calibFile);
 
                     std::vector<std::string> size;
                     Utils::splitString(slamVideoInfos.resolution, 'x', size);
@@ -121,13 +138,13 @@ void MapCreator::loadSites(const std::string& erlebARDir, const std::string& con
                         if (videoAndCalib.calibration.imageSize().width != width ||
                             videoAndCalib.calibration.imageSize().height != height)
                         {
-                            videoAndCalib.calibration.adaptForNewResolution(CVSize(width, height));
+                            videoAndCalib.calibration.adaptForNewResolution(CVSize(width, height), true);
                             //throw std::runtime_error("Resolutions of video and calibration do not fit together. Using: " + calibFile + " and " + name);
                         }
                     }
                     else
                     {
-                        throw std::runtime_error("Could not estimate resolution string: " + calibFile);
+                        throw std::runtime_error("MapCreator::loadSites: Could not estimate resolution string: " + calibFile);
                     }
 
                     //add video to videos vector
@@ -146,12 +163,63 @@ void MapCreator::loadSites(const std::string& erlebARDir, const std::string& con
     }
 }
 
+bool MapCreator::createMarkerMap(AreaConfig&        areaConfig,
+                                 const std::string& mapFile,
+                                 const std::string& mapDir,
+                                 const float        cullRedundantPerc)
+{
+    //wai mode config
+    WAI::ModeOrbSlam2::Params modeParams;
+    modeParams.cullRedundantPerc = cullRedundantPerc;
+    modeParams.serial            = true;
+    modeParams.fixOldKfs         = false;
+    modeParams.retainImg         = true;
+
+    ORBVocabulary* voc = new ORBVocabulary();
+    if (!voc->loadFromBinaryFile(_vocFile))
+    {
+        std::cout << "Can't open vocabulary file!!! " << _vocFile << std::endl;
+        exit(1);
+    }
+    WAIKeyFrameDB* kfDB          = new WAIKeyFrameDB(*voc);
+    WAIMap*        map           = new WAIMap(kfDB);
+    SLNode         mapNode       = SLNode();
+    cv::Mat        nodeTransform = cv::Mat::eye(4, 4, CV_32F);
+
+    bool mapLoadingSuccess = WAIMapStorage::loadMap(map,
+                                                    &mapNode,
+                                                    voc,
+                                                    mapDir + "/" + mapFile,
+                                                    false,
+                                                    modeParams.fixOldKfs);
+
+    if (!mapLoadingSuccess)
+    {
+        std::cout << ("MapCreator::createMarkerMap: Could not load map from file " + mapDir + "/" + mapFile) << std::endl;
+        return false;
+    }
+
+    cv::Mat markerImgGray = cv::imread(areaConfig.markerFile, cv::IMREAD_GRAYSCALE);
+
+    FeatureExtractorFactory      factory;
+    std::unique_ptr<KPextractor> kpExtractor = factory.make(7, {markerImgGray.cols, markerImgGray.rows});
+
+    bool result = WAISlamTools::doMarkerMapPreprocessing(areaConfig.markerFile,
+                                                         nodeTransform,
+                                                         0.355f,
+                                                         kpExtractor.get(),
+                                                         map,
+                                                         areaConfig.videos.front().calibration.cameraMat(), // TODO(dgj1): use actual calibration for marker image
+                                                         voc);
+
+    return result;
+}
+
 void MapCreator::createNewWaiMap(const Location& location, const Area& area, AreaConfig& areaConfig)
 {
-    WAI_INFO("Starting map creation for area: %s", area.c_str());
-
+    WAI_INFO("MapCreator::createNewWaiMap: Starting map creation for area: %s", area.c_str());
     //the lastly saved map file (only valid if initialized is true)
-    std::string mapFile     = constructSlamMapFileName(location, area, "SURF", Utils::getDateTime2String()); // TODO(dgj1): replace SURF with actual extractor type
+    std::string mapFile     = constructSlamMapFileName(location, area, _kpExtractor->GetName(), Utils::getDateTime2String());
     std::string mapDir      = _outputDir + area + "/";
     bool        initialized = false;
     std::string currentMapFileName;
@@ -163,9 +231,9 @@ void MapCreator::createNewWaiMap(const Location& location, const Area& area, Are
     {
         if (!areaConfig.markerFile.empty())
         {
-            if (!doMarkerMapPreprocessing(mapDir, currentMapFileName, areaConfig.markerFile, 0.355f, areaConfig.videos.front().calibration, cullRedundantPerc))
+            if (!createMarkerMap(areaConfig, currentMapFileName, mapDir, cullRedundantPerc))
             {
-                WAI_WARN("Could not do marker map preprocessing for %s %s", location.c_str(), area.c_str());
+                WAI_WARN("MapCreator::createNewWaiMap: Could not do marker map preprocessing for %s %s", location.c_str(), area.c_str());
             }
         }
 
@@ -175,10 +243,10 @@ void MapCreator::createNewWaiMap(const Location& location, const Area& area, Are
     }
     else
     {
-        WAI_WARN("No map created for area: %s", area.c_str());
+        WAI_WARN("MapCreator::createNewWaiMap: No map created for area: %s", area.c_str());
     }
 
-    WAI_INFO("Finished map creation for area: %s", area.c_str());
+    WAI_INFO("MapCreator::createNewWaiMap: Finished map creation for area: %s", area.c_str());
 }
 
 bool MapCreator::createNewDenseWaiMap(Videos&            videos,
@@ -207,7 +275,7 @@ bool MapCreator::createNewDenseWaiMap(Videos&            videos,
     //use all videos to create a new map
     for (Videos::size_type videoIdx = 0; videoIdx < videos.size(); ++videoIdx)
     {
-        WAI_DEBUG("Starting video %s", videos[videoIdx].videoFile.c_str());
+        WAI_DEBUG("MapCreator::createNewDenseWaiMap: Starting video %s", videos[videoIdx].videoFile.c_str());
         lastMapFileName    = currentMapFileName;
         currentMapFileName = std::to_string(videoIndex) + "_" + mapFile;
 
@@ -221,21 +289,55 @@ bool MapCreator::createNewDenseWaiMap(Videos&            videos,
         //check if resolution of captured frame fits to calibration
         if (capturedSize.width != cap->activeCamera->calibration.imageSize().width ||
             capturedSize.height != cap->activeCamera->calibration.imageSize().height)
-            throw std::runtime_error("MapCreator::createWaiMap: Resolution of captured frame does not fit to calibration: " + videos[videoIdx].videoFile);
+            throw std::runtime_error("MapCreator::createNewDenseWaiMap: Resolution of captured frame does not fit to calibration: " + videos[videoIdx].videoFile);
 
-        //instantiate wai mode
-        std::unique_ptr<WAI::ModeOrbSlam2> waiMode =
-          std::make_unique<WAI::ModeOrbSlam2>(cap->activeCamera->calibration.cameraMat(),
-                                              cap->activeCamera->calibration.distortion(),
-                                              modeParams,
-                                              _vocFile);
+        FeatureExtractorFactory factory;
+        _kpExtractor = factory.make(7, {capturedSize.width, capturedSize.height});
+
+        ORBVocabulary* voc = new ORBVocabulary();
+        if (!voc->loadFromBinaryFile(_vocFile))
+        {
+            std::cout << "MapCreator::createNewDenseWaiMap: Can't open vocabulary file!!! " << _vocFile << std::endl;
+            exit(1);
+        }
+        WAIMap* map = nullptr;
 
         //if we have an active map from one of the previously processed videos for this area then load it
         SLNode mapNode = SLNode();
         if (initialized)
         {
-            loadMap(waiMode.get(), mapDir, lastMapFileName, modeParams.fixOldKfs, &mapNode);
+            WAIKeyFrameDB* kfdb    = new WAIKeyFrameDB(*voc);
+            map                    = new WAIMap(kfdb);
+            bool mapLoadingSuccess = WAIMapStorage::loadMap(map,
+                                                            &mapNode,
+                                                            voc,
+                                                            mapDir + lastMapFileName,
+                                                            false,
+                                                            modeParams.fixOldKfs);
+            if (!mapLoadingSuccess)
+            {
+                std::cout << ("MapCreator::createNewDenseWaiMap: Could not load map from file " + mapDir + "/" + mapFile) << std::endl;
+                return;
+            }
         }
+        else
+        {
+            std::cout << "MapCreator::createNewDenseWaiMap: not initialized" << std::endl;
+        }
+
+        //instantiate wai mode
+        std::unique_ptr<WAISlam> waiMode =
+          std::make_unique<WAISlam>(cap->activeCamera->calibration.cameraMat(),
+                                    cap->activeCamera->calibration.distortion(),
+                                    voc,
+                                    _kpExtractor.get(),
+                                    map,
+                                    modeParams.onlyTracking,
+                                    modeParams.serial,
+                                    modeParams.retainImg,
+                                    modeParams.cullRedundantPerc);
+
+        int firstRun = true;
 
         //frame with which map was initialized (we want to run the previous frames again)
         int  videoLength     = cap->videoLength();
@@ -264,15 +366,18 @@ bool MapCreator::createNewDenseWaiMap(Videos&            videos,
                 break;
 
             //update wai
-            waiMode->update(cap->lastFrameGray, cap->lastFrame);
-
+            waiMode->update(cap->lastFrameGray);
+            if (firstRun)
+            {
+                firstRun = false;
+            }
             //check if it relocalized once
             if (!relocalizedOnce && waiMode->getTrackingState() == WAI::TrackingState::TrackingState_TrackingOK)
             {
                 relocalizedOnce = true;
                 //if it relocalized once we will store the current index and repeat video up to this index
                 finalFrameIndex = currentFrameIndex;
-                WAI_DEBUG("Relocalized once for video %s at index %2", videos[videoIdx].videoFile.c_str(), std::to_string(finalFrameIndex).c_str());
+                WAI_DEBUG("Relocalized once for video %s at index %i", videos[videoIdx].videoFile.c_str(), finalFrameIndex);
             }
 
             decorateDebug(waiMode.get(), cap, currentFrameIndex, videoLength, waiMode->getNumKeyFrames());
@@ -283,6 +388,10 @@ bool MapCreator::createNewDenseWaiMap(Videos&            videos,
         {
             initialized = true;
             saveMap(waiMode.get(), mapDir, currentMapFileName, &mapNode);
+        }
+        else
+        {
+            std::cout << "Mode return not initialized!!" << std::endl;
         }
 
         //increment video index for map saving
@@ -305,413 +414,50 @@ void MapCreator::thinOutNewWaiMap(const std::string& mapDir,
     modeParams.fixOldKfs         = false;
     modeParams.retainImg         = true;
 
-    //instantiate wai mode
-    std::unique_ptr<WAI::ModeOrbSlam2> waiMode =
-      std::make_unique<WAI::ModeOrbSlam2>(calib.cameraMat(),
-                                          calib.distortion(),
-                                          modeParams,
-                                          _vocFile);
+    ORBVocabulary* voc = new ORBVocabulary();
+    if (!voc->loadFromBinaryFile(_vocFile))
+    {
+        std::cout << "Can't open vocabulary file!!! " << _vocFile << std::endl;
+        exit(1);
+    }
+    WAIKeyFrameDB* kfdb = new WAIKeyFrameDB(*voc);
+    WAIMap*        map  = new WAIMap(kfdb);
 
     //load the map (currentMapFileName is valid if initialized is true)
     SLNode mapNode = SLNode();
-    loadMap(waiMode.get(), mapDir, inputMapFile, modeParams.fixOldKfs, &mapNode);
+
+    bool mapLoadingSuccess = WAIMapStorage::loadMap(map,
+                                                    &mapNode,
+                                                    voc,
+                                                    mapDir + "/" + inputMapFile,
+                                                    false,
+                                                    modeParams.fixOldKfs);
+    if (!mapLoadingSuccess)
+    {
+        std::cout << ("MapCreator::thinOutNewWaiMap: Could not load map from file " + mapDir + "/" + inputMapFile) << std::endl;
+        return;
+    }
+    //instantiate wai mode
+    std::unique_ptr<WAISlam> waiMode =
+      std::make_unique<WAISlam>(calib.cameraMat(),
+                                calib.distortion(),
+                                voc,
+                                _kpExtractor.get(),
+                                map,
+                                modeParams.onlyTracking,
+                                modeParams.serial,
+                                modeParams.retainImg,
+                                modeParams.cullRedundantPerc);
 
     //cull keyframes
     std::vector<WAIKeyFrame*> kfs = waiMode->getMap()->GetAllKeyFrames();
-    cullKeyframes(kfs, modeParams.cullRedundantPerc);
+    cullKeyframes(waiMode.get(), kfs, modeParams.cullRedundantPerc);
 
     //save map again (we use the map file name without index because this is the final map)
     saveMap(waiMode.get(), mapDir, outputMapFile, &mapNode);
 }
 
-bool MapCreator::findMarkerHomography(WAIFrame&    markerFrame,
-                                      WAIKeyFrame* kfCand,
-                                      cv::Mat&     homography,
-                                      int          minMatches)
-{
-    bool result = false;
-
-    ORBmatcher matcher(0.9, true);
-
-    std::vector<int> markerMatchesToCurrentFrame;
-    int              nmatches = matcher.SearchForMarkerMap(markerFrame, *kfCand, markerMatchesToCurrentFrame);
-
-    if (nmatches > minMatches)
-    {
-        std::vector<cv::Point2f> markerPoints;
-        std::vector<cv::Point2f> framePoints;
-
-        for (int j = 0; j < markerMatchesToCurrentFrame.size(); j++)
-        {
-            if (markerMatchesToCurrentFrame[j] >= 0)
-            {
-                markerPoints.push_back(markerFrame.mvKeysUn[j].pt);
-                framePoints.push_back(kfCand->mvKeysUn[markerMatchesToCurrentFrame[j]].pt);
-            }
-        }
-
-        homography = cv::findHomography(markerPoints,
-                                        framePoints,
-                                        cv::RANSAC);
-
-        if (!homography.empty())
-        {
-            homography.convertTo(homography, CV_32F);
-
-            result = true;
-        }
-    }
-
-    return result;
-}
-
-bool MapCreator::doMarkerMapPreprocessing(const std::string& mapDir,
-                                          const std::string& mapFile,
-                                          std::string        markerFile,
-                                          float              markerWidthInM,
-                                          CVCalibration&     calib,
-                                          const float        cullRedundantPerc)
-{
-    //wai mode config
-    WAI::ModeOrbSlam2::Params modeParams;
-    modeParams.cullRedundantPerc = cullRedundantPerc;
-    modeParams.serial            = true;
-    modeParams.fixOldKfs         = false;
-    modeParams.retainImg         = true;
-
-    //instantiate wai mode
-    std::unique_ptr<WAI::ModeOrbSlam2> waiMode =
-      std::make_unique<WAI::ModeOrbSlam2>(calib.cameraMat(),
-                                          calib.distortion(),
-                                          modeParams,
-                                          _vocFile);
-
-    SLNode mapNode = SLNode();
-    loadMap(waiMode.get(), mapDir, mapFile, modeParams.fixOldKfs, &mapNode);
-
-    // Additional steps to save marker map
-    // 1. Find matches to marker on two keyframes
-    // 1.a Extract features from marker image
-    KPextractor* markerExtractor = new ORB_SLAM2::SURFextractor(800); //TODO(dgj1): delete this somewhere
-    WAIFrame     markerFrame     = waiMode->createMarkerFrame(markerFile, markerExtractor);
-
-    // 1.b Find keyframes with enough matches to marker image
-    WAIMap*                   map = waiMode->getMap();
-    std::vector<WAIKeyFrame*> kfs = map->GetAllKeyFrames();
-
-    WAIKeyFrame* matchedKf1 = nullptr;
-    WAIKeyFrame* matchedKf2 = nullptr;
-
-    cv::Mat ul = cv::Mat(cv::Point3f(0, 0, 1));
-    cv::Mat ur = cv::Mat(cv::Point3f(markerFrame.imgGray.cols, 0, 1));
-    cv::Mat ll = cv::Mat(cv::Point3f(0, markerFrame.imgGray.rows, 1));
-    cv::Mat lr = cv::Mat(cv::Point3f(markerFrame.imgGray.cols, markerFrame.imgGray.rows, 1));
-
-    cv::Mat ulKf1, urKf1, llKf1, lrKf1, ulKf2, urKf2, llKf2, lrKf2;
-    cv::Mat ul3D, ur3D, ll3D, lr3D;
-    cv::Mat AC, AB, n;
-
-    for (int i1 = 0; i1 < kfs.size() - 1; i1++)
-    {
-        WAIKeyFrame* kfCand1 = kfs[i1];
-
-        if (kfCand1->isBad()) continue;
-
-        // 2. Calculate homography between the keyframes and marker
-        cv::Mat homography1;
-        if (findMarkerHomography(markerFrame, kfCand1, homography1, 50))
-        {
-            // 3.a Calculate position of the markers cornerpoints on first keyframe in 2D
-            // NOTE(dgj1): assumption that intrinsic camera parameters are the same
-            // TODO(dgj1): think about this assumption
-            ulKf1 = homography1 * ul;
-            ulKf1 /= ulKf1.at<float>(2, 0);
-            urKf1 = homography1 * ur;
-            urKf1 /= urKf1.at<float>(2, 0);
-            llKf1 = homography1 * ll;
-            llKf1 /= llKf1.at<float>(2, 0);
-            lrKf1 = homography1 * lr;
-            lrKf1 /= lrKf1.at<float>(2, 0);
-
-            for (int i2 = i1 + 1; i2 < kfs.size(); i2++)
-            {
-                WAIKeyFrame* kfCand2 = kfs[i2];
-
-                if (kfCand2->isBad()) continue;
-
-                cv::Mat homography2;
-                if (findMarkerHomography(markerFrame, kfCand2, homography2, 50))
-                {
-                    // 3.b Calculate position of the markers cornerpoints on second keyframe in 2D
-                    // NOTE(dgj1): assumption that intrinsic camera parameters are the same
-                    // TODO(dgj1): think about this assumption
-                    ulKf2 = homography2 * ul;
-                    ulKf2 /= ulKf2.at<float>(2, 0);
-                    urKf2 = homography2 * ur;
-                    urKf2 /= urKf2.at<float>(2, 0);
-                    llKf2 = homography2 * ll;
-                    llKf2 /= llKf2.at<float>(2, 0);
-                    lrKf2 = homography2 * lr;
-                    lrKf2 /= lrKf2.at<float>(2, 0);
-
-                    // 4. Triangulate position of the markers cornerpoints
-                    cv::Mat Rcw1 = kfCand1->GetRotation();
-                    cv::Mat Rwc1 = Rcw1.t();
-                    cv::Mat tcw1 = kfCand1->GetTranslation();
-                    cv::Mat Tcw1(3, 4, CV_32F);
-                    Rcw1.copyTo(Tcw1.colRange(0, 3));
-                    tcw1.copyTo(Tcw1.col(3));
-
-                    const float& fx1    = kfCand1->fx;
-                    const float& fy1    = kfCand1->fy;
-                    const float& cx1    = kfCand1->cx;
-                    const float& cy1    = kfCand1->cy;
-                    const float& invfx1 = kfCand1->invfx;
-                    const float& invfy1 = kfCand1->invfy;
-
-                    cv::Mat Rcw2 = kfCand2->GetRotation();
-                    cv::Mat Rwc2 = Rcw2.t();
-                    cv::Mat tcw2 = kfCand2->GetTranslation();
-                    cv::Mat Tcw2(3, 4, CV_32F);
-                    Rcw2.copyTo(Tcw2.colRange(0, 3));
-                    tcw2.copyTo(Tcw2.col(3));
-
-                    const float& fx2    = kfCand2->fx;
-                    const float& fy2    = kfCand2->fy;
-                    const float& cx2    = kfCand2->cx;
-                    const float& cy2    = kfCand2->cy;
-                    const float& invfx2 = kfCand2->invfx;
-                    const float& invfy2 = kfCand2->invfy;
-
-                    {
-                        cv::Mat ul1 = (cv::Mat_<float>(3, 1) << (ulKf1.at<float>(0, 0) - cx1) * invfx1, (ulKf1.at<float>(1, 0) - cy1) * invfy1, 1.0);
-                        cv::Mat ul2 = (cv::Mat_<float>(3, 1) << (ulKf2.at<float>(0, 0) - cx2) * invfx2, (ulKf2.at<float>(1, 0) - cy2) * invfy2, 1.0);
-
-                        // Linear Triangulation Method
-                        cv::Mat A(4, 4, CV_32F);
-                        A.row(0) = ul1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
-                        A.row(1) = ul1.at<float>(1) * Tcw1.row(2) - Tcw1.row(1);
-                        A.row(2) = ul2.at<float>(0) * Tcw2.row(2) - Tcw2.row(0);
-                        A.row(3) = ul2.at<float>(1) * Tcw2.row(2) - Tcw2.row(1);
-
-                        cv::Mat w, u, vt;
-                        cv::SVD::compute(A, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
-
-                        ul3D = vt.row(3).t();
-
-                        if (ul3D.at<float>(3) != 0)
-                        {
-                            // Euclidean coordinates
-                            ul3D = ul3D.rowRange(0, 3) / ul3D.at<float>(3);
-                        }
-                    }
-
-                    {
-                        cv::Mat ur1 = (cv::Mat_<float>(3, 1) << (urKf1.at<float>(0, 0) - cx1) * invfx1, (urKf1.at<float>(1, 0) - cy1) * invfy1, 1.0);
-                        cv::Mat ur2 = (cv::Mat_<float>(3, 1) << (urKf2.at<float>(0, 0) - cx2) * invfx2, (urKf2.at<float>(1, 0) - cy2) * invfy2, 1.0);
-
-                        // Linear Triangulation Method
-                        cv::Mat A(4, 4, CV_32F);
-                        A.row(0) = ur1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
-                        A.row(1) = ur1.at<float>(1) * Tcw1.row(2) - Tcw1.row(1);
-                        A.row(2) = ur2.at<float>(0) * Tcw2.row(2) - Tcw2.row(0);
-                        A.row(3) = ur2.at<float>(1) * Tcw2.row(2) - Tcw2.row(1);
-
-                        cv::Mat w, u, vt;
-                        cv::SVD::compute(A, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
-
-                        ur3D = vt.row(3).t();
-
-                        if (ur3D.at<float>(3) != 0)
-                        {
-                            // Euclidean coordinates
-                            ur3D = ur3D.rowRange(0, 3) / ur3D.at<float>(3);
-                        }
-                    }
-
-                    {
-                        cv::Mat ll1 = (cv::Mat_<float>(3, 1) << (llKf1.at<float>(0, 0) - cx1) * invfx1, (llKf1.at<float>(1, 0) - cy1) * invfy1, 1.0);
-                        cv::Mat ll2 = (cv::Mat_<float>(3, 1) << (llKf2.at<float>(0, 0) - cx2) * invfx2, (llKf2.at<float>(1, 0) - cy2) * invfy2, 1.0);
-
-                        // Linear Triangulation Method
-                        cv::Mat A(4, 4, CV_32F);
-                        A.row(0) = ll1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
-                        A.row(1) = ll1.at<float>(1) * Tcw1.row(2) - Tcw1.row(1);
-                        A.row(2) = ll2.at<float>(0) * Tcw2.row(2) - Tcw2.row(0);
-                        A.row(3) = ll2.at<float>(1) * Tcw2.row(2) - Tcw2.row(1);
-
-                        cv::Mat w, u, vt;
-                        cv::SVD::compute(A, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
-
-                        ll3D = vt.row(3).t();
-
-                        if (ll3D.at<float>(3) != 0)
-                        {
-                            // Euclidean coordinates
-                            ll3D = ll3D.rowRange(0, 3) / ll3D.at<float>(3);
-                        }
-                    }
-
-                    {
-                        cv::Mat lr1 = (cv::Mat_<float>(3, 1) << (lrKf1.at<float>(0, 0) - cx1) * invfx1, (lrKf1.at<float>(1, 0) - cy1) * invfy1, 1.0);
-                        cv::Mat lr2 = (cv::Mat_<float>(3, 1) << (lrKf2.at<float>(0, 0) - cx2) * invfx2, (lrKf2.at<float>(1, 0) - cy2) * invfy2, 1.0);
-
-                        // Linear Triangulation Method
-                        cv::Mat A(4, 4, CV_32F);
-                        A.row(0) = lr1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
-                        A.row(1) = lr1.at<float>(1) * Tcw1.row(2) - Tcw1.row(1);
-                        A.row(2) = lr2.at<float>(0) * Tcw2.row(2) - Tcw2.row(0);
-                        A.row(3) = lr2.at<float>(1) * Tcw2.row(2) - Tcw2.row(1);
-
-                        cv::Mat w, u, vt;
-                        cv::SVD::compute(A, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
-
-                        lr3D = vt.row(3).t();
-
-                        if (lr3D.at<float>(3) != 0)
-                        {
-                            // Euclidean coordinates
-                            lr3D = lr3D.rowRange(0, 3) / lr3D.at<float>(3);
-                        }
-                    }
-
-                    AC = ll3D - ul3D;
-                    AB = ur3D - ul3D;
-
-                    cv::Vec3f vAC = AC;
-                    cv::Vec3f vAB = AB;
-
-                    cv::Vec3f vn = vAB.cross(vAC);
-                    n            = cv::Mat(vn);
-
-                    cv::Mat   AD  = lr3D - ul3D;
-                    cv::Vec3f vAD = AD;
-
-                    float d = cv::norm(vn.dot(vAD)) / cv::norm(vn);
-                    if (d < 0.01f)
-                    {
-                        matchedKf1 = kfCand1;
-                        matchedKf2 = kfCand2;
-
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (matchedKf2) break;
-    }
-
-    if (!matchedKf1 || !matchedKf2)
-    {
-        return false;
-    }
-
-    // 5. Cull mappoints outside of marker
-    std::vector<WAIMapPoint*> mapPoints = map->GetAllMapPoints();
-
-    cv::Mat system = cv::Mat::zeros(3, 3, CV_32F);
-    AC.copyTo(system.rowRange(0, 3).col(0));
-    AB.copyTo(system.rowRange(0, 3).col(1));
-    n.copyTo(system.rowRange(0, 3).col(2));
-
-    cv::Mat systemInv = system.inv();
-
-    for (int i = 0; i < mapPoints.size(); i++)
-    {
-        WAIMapPoint* mp = mapPoints[i];
-
-        if (mp->isBad()) continue;
-
-        cv::Mat sol = systemInv * (mp->GetWorldPos() - ul3D);
-
-        if (sol.at<float>(0, 0) < 0 || sol.at<float>(0, 0) > 1 ||
-            sol.at<float>(1, 0) < 0 || sol.at<float>(1, 0) > 1 ||
-            sol.at<float>(2, 0) < -0.1f || sol.at<float>(2, 0) > 0.1f)
-        {
-            mp->SetBadFlag();
-        }
-    }
-
-    for (int i = 0; i < kfs.size(); i++)
-    {
-        WAIKeyFrame* kf = kfs[i];
-
-        if (kf->mnId == 0 || kf->isBad()) continue;
-
-        int mpCount = 0;
-
-        std::vector<WAIMapPoint*> mps = kf->GetMapPointMatches();
-        for (int j = 0; j < mps.size(); j++)
-        {
-            WAIMapPoint* mp = mps[j];
-
-            if (!mp || mp->isBad()) continue;
-
-            mpCount++;
-        }
-
-        if (mpCount <= 0)
-        {
-            kf->SetBadFlag();
-        }
-    }
-
-    cv::Mat systemNorm               = cv::Mat::zeros(3, 3, CV_32F);
-    systemNorm.rowRange(0, 3).col(0) = system.rowRange(0, 3).col(1) / cv::norm(AB);
-    systemNorm.rowRange(0, 3).col(1) = system.rowRange(0, 3).col(0) / cv::norm(AC);
-    systemNorm.rowRange(0, 3).col(2) = system.rowRange(0, 3).col(2) / cv::norm(n);
-
-    cv::Mat systemNormInv = systemNorm.inv();
-
-    cv::Mat nodeTransform = cv::Mat::eye(4, 4, CV_32F);
-    cv::Mat ul3Dinv       = -systemNormInv * ul3D;
-    ul3Dinv.copyTo(nodeTransform.rowRange(0, 3).col(3));
-    systemNormInv.copyTo(nodeTransform.rowRange(0, 3).colRange(0, 3));
-
-    cv::Mat scaleMat         = cv::Mat::eye(4, 4, CV_32F);
-    float   markerWidthInRef = cv::norm(ul3D - ur3D);
-    float   scaleFactor      = markerWidthInM / markerWidthInRef;
-    scaleMat.at<float>(0, 0) = scaleFactor;
-    scaleMat.at<float>(1, 1) = scaleFactor;
-    scaleMat.at<float>(2, 2) = scaleFactor;
-
-    nodeTransform = scaleMat * nodeTransform;
-
-    if (_mpUL)
-    {
-        delete _mpUL;
-        _mpUL = nullptr;
-    }
-    if (_mpUR)
-    {
-        delete _mpUR;
-        _mpUR = nullptr;
-    }
-    if (_mpLL)
-    {
-        delete _mpLL;
-        _mpLL = nullptr;
-    }
-    if (_mpLR)
-    {
-        delete _mpLR;
-        _mpLR = nullptr;
-    }
-
-    _mpUL = new WAIMapPoint(0, ul3D, nullptr, false);
-    _mpUR = new WAIMapPoint(0, ur3D, nullptr, false);
-    _mpLL = new WAIMapPoint(0, ll3D, nullptr, false);
-    _mpLR = new WAIMapPoint(0, lr3D, nullptr, false);
-
-    mapNode.om(WAIMapStorage::convertToSLMat(nodeTransform));
-
-    saveMap(waiMode.get(), mapDir, mapFile, &mapNode);
-
-    return true;
-}
-
-void MapCreator::cullKeyframes(std::vector<WAIKeyFrame*>& kfs, const float cullRedundantPerc)
+void MapCreator::cullKeyframes(WAISlam* waiMode, std::vector<WAIKeyFrame*>& kfs, const float cullRedundantPerc)
 {
     for (auto itKF = kfs.begin(); itKF != kfs.end(); ++itKF)
     {
@@ -774,31 +520,28 @@ void MapCreator::cullKeyframes(std::vector<WAIKeyFrame*>& kfs, const float cullR
             if (nRedundantObservations > cullRedundantPerc * nMPs)
             {
                 pKF->SetBadFlag();
+                waiMode->getMap()->EraseKeyFrame(pKF);
             }
         }
     }
 }
 
-void MapCreator::decorateDebug(WAI::ModeOrbSlam2* waiMode, CVCapture* cap, const int currentFrameIndex, const int videoLength, const int numOfKfs)
+void MapCreator::decorateDebug(WAISlam* waiMode, CVCapture* cap, const int currentFrameIndex, const int videoLength, const int numOfKfs)
 {
     //#ifdef _DEBUG
     if (!cap->lastFrame.empty())
     {
-        cv::Mat            decoImg      = cap->lastFrame.clone();
-        WAI::TrackingState waiModeState = waiMode->getTrackingState();
+        cv::Mat     decoImg = cap->lastFrame.clone();
+        std::string state   = waiMode->getPrintableState();
+
+        waiMode->drawInfo(decoImg, true, true, true);
 
         double     fontScale = 0.5;
         cv::Point  stateOff(10, 25);
         cv::Point  idxOff = stateOff + cv::Point(0, 20);
         cv::Point  kfsOff = idxOff + cv::Point(0, 20);
         cv::Scalar color  = CV_RGB(255, 0, 0);
-        if (waiModeState == WAI::TrackingState::TrackingState_Initializing)
-            cv::putText(decoImg, "Initializing", stateOff, 0, fontScale, color);
-        else if (waiModeState == WAI::TrackingState::TrackingState_TrackingLost)
-            cv::putText(decoImg, "Relocalizing", stateOff, 0, fontScale, color);
-        else if (waiModeState == WAI::TrackingState::TrackingState_TrackingOK)
-            cv::putText(decoImg, "Tracking", stateOff, 0, fontScale, color);
-
+        cv::putText(decoImg, state, stateOff, 0, fontScale, color);
         cv::putText(decoImg, "FrameId: (" + std::to_string(currentFrameIndex) + "/" + std::to_string(videoLength) + ")", idxOff, 0, fontScale, color);
         cv::putText(decoImg, "Num Kfs: " + std::to_string(numOfKfs), kfsOff, 0, fontScale, color);
         cv::imshow("lastFrame", decoImg);
@@ -807,7 +550,7 @@ void MapCreator::decorateDebug(WAI::ModeOrbSlam2* waiMode, CVCapture* cap, const
     //#endif
 }
 
-void MapCreator::saveMap(WAI::ModeOrbSlam2* waiMode,
+void MapCreator::saveMap(WAISlam*           waiMode,
                          const std::string& mapDir,
                          const std::string& currentMapFileName,
                          SLNode*            mapNode)
@@ -834,39 +577,10 @@ void MapCreator::saveMap(WAI::ModeOrbSlam2* waiMode,
                                 mapDir + currentMapFileName,
                                 imgDir))
     {
-        throw std::runtime_error("Could not save map file: " + mapDir + currentMapFileName);
+        throw std::runtime_error("MapCreator::saveMap: Could not save map file: " + mapDir + currentMapFileName);
     }
 
     waiMode->resume();
-}
-
-void MapCreator::loadMap(WAI::ModeOrbSlam2* waiMode,
-                         const std::string& mapDir,
-                         const std::string& currentMapFileName,
-                         bool               fixKfsForLBA,
-                         SLNode*            mapNode)
-{
-    waiMode->requestStateIdle();
-    while (!waiMode->hasStateIdle())
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    waiMode->reset();
-
-    bool mapLoadingSuccess = WAIMapStorage::loadMap(waiMode->getMap(),
-                                                    waiMode->getKfDB(),
-                                                    mapNode,
-                                                    mapDir + currentMapFileName,
-                                                    waiMode->retainImage(),
-                                                    fixKfsForLBA);
-
-    if (!mapLoadingSuccess)
-    {
-        throw std::runtime_error("Could not load map from file: " + mapDir + currentMapFileName);
-    }
-
-    waiMode->resume();
-    waiMode->setInitialized(true);
 }
 
 void MapCreator::execute()

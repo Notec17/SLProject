@@ -20,7 +20,6 @@
 #include <SLApplication.h>
 #include <SLInterface.h>
 #include <AverageTiming.h>
-#include <CVCapture.h>
 #include <CVImage.h>
 #include <CVTrackedFeatures.h>
 #include <SLGLProgram.h>
@@ -59,7 +58,7 @@ AppDemoWaiGui::~AppDemoWaiGui()
     uiPrefs->save(_prefsFileName, ImGui::GetStyle());
 }
 //-----------------------------------------------------------------------------
-void AppDemoWaiGui::addInfoDialog(AppDemoGuiInfosDialog* dialog)
+void AppDemoWaiGui::addInfoDialog(std::shared_ptr<AppDemoGuiInfosDialog> dialog)
 {
     string name = string(dialog->getName());
     if (_infoDialogs.find(name) == _infoDialogs.end())
@@ -132,38 +131,14 @@ void AppDemoWaiGui::buildMenu(SLScene* s, SLSceneView* sv)
         {
             ImGui::MenuItem("Start", nullptr, &uiPrefs->showSlamLoad);
             ImGui::MenuItem("Tracked Mapping", nullptr, &uiPrefs->showTrackedMapping);
-            ImGui::MenuItem("Params", nullptr, &uiPrefs->showSlamParam);
 
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Video"))
+        if (ImGui::BeginMenu("Video/GPS"))
         {
-            CVCamera* ac = CVCapture::instance()->activeCamera;
-
-            //CVCalibration* mc = &CVCapture::instance()->mainCam;
-            //CVCalibration* sc = &CVCapture::instance()->scndCam;
-
-            ImGui::MenuItem("Video Storage", nullptr, &uiPrefs->showVideoStorage);
+            ImGui::MenuItem("Video/GPS Storage", nullptr, &uiPrefs->showVideoStorage);
             ImGui::MenuItem("Video Controls", nullptr, &uiPrefs->showVideoControls);
-
-            if (ImGui::BeginMenu("Mirror Camera"))
-            {
-                if (ImGui::MenuItem("Horizontally", nullptr, ac->mirrorH()))
-                    ac->toggleMirrorH();
-
-                if (ImGui::MenuItem("Vertically", nullptr, ac->mirrorV()))
-                    ac->toggleMirrorV();
-
-                ImGui::EndMenu();
-            }
-
-            CVCapture* cap = CVCapture::instance();
-            if (cap->activeCamera)
-            {
-                if (ImGui::MenuItem("Undistort Image", nullptr, cap->activeCamera->showUndistorted(), ac->calibration.state() == CS_calibrated))
-                    cap->activeCamera->showUndistorted(!cap->activeCamera->showUndistorted());
-            }
 
             ImGui::EndMenu();
         }

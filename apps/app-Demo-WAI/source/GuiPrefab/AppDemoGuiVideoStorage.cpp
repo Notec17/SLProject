@@ -16,21 +16,23 @@
 #include <Utils.h>
 #include <AppDemoGuiVideoStorage.h>
 #include <SLApplication.h>
-#include <CVCapture.h>
+#include <WAIApp.h>
 
 //-----------------------------------------------------------------------------
 
 AppDemoGuiVideoStorage::AppDemoGuiVideoStorage(const std::string&     name,
                                                bool*                  activator,
-                                               std::queue<WAIEvent*>* eventQueue)
+                                               std::queue<WAIEvent*>* eventQueue,
+                                               WAIApp&                waiApp)
   : AppDemoGuiInfosDialog(name, activator),
-    _eventQueue(eventQueue)
+    _eventQueue(eventQueue),
+    _waiApp(waiApp)
 {
 }
 //-----------------------------------------------------------------------------
 void AppDemoGuiVideoStorage::buildInfos(SLScene* s, SLSceneView* sv)
 {
-    ImGui::Begin("Video storage", _activator, 0);
+    ImGui::Begin("Video/GPS storage", _activator, 0);
     ImGui::Separator();
     if (ImGui::Button(_recording ? "Stop recording" : "Start recording", ImVec2(ImGui::GetContentRegionAvailWidth(), 0.0f)))
     {
@@ -38,8 +40,8 @@ void AppDemoGuiVideoStorage::buildInfos(SLScene* s, SLSceneView* sv)
 
         if (!_recording)
         {
-            cv::Size    size     = cv::Size(CVCapture::instance()->lastFrame.cols, CVCapture::instance()->lastFrame.rows);
-            std::string filename = Utils::getDateTime2String() + "_" +
+            const cv::Size& size     = _waiApp.getFrameSize();
+            std::string     filename = Utils::getDateTime2String() + "_" +
                                    SLApplication::getComputerInfos() + "_" +
                                    std::to_string(size.width) + "x" + std::to_string(size.height) + ".avi";
 

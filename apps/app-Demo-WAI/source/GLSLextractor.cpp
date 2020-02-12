@@ -1118,7 +1118,7 @@ static int bit_pattern_31_[256 * 4] =
 };
 
 GLSLextractor::GLSLextractor(int w, int h, int nbKeypointsBigSigma, int nbKeypointsSmallSigma, float highThrs, float lowThrs, float bigSigma, float smallSigma)
-  : KPextractor("GLSL"),
+  : KPextractor("GLSL", true),
     imgProc(w, h, nbKeypointsBigSigma, nbKeypointsSmallSigma, highThrs, lowThrs, bigSigma, smallSigma)
 {
     mvScaleFactor.resize(1);
@@ -1133,12 +1133,16 @@ GLSLextractor::GLSLextractor(int w, int h, int nbKeypointsBigSigma, int nbKeypoi
     nlevels             = 1;
     scaleFactor         = 1.0;
 
-    idx = 0;
-    images[1] = cv::Mat(w, h, CV_8UC1);
+    idx       = 0;
+    images[1] = cv::Mat(h, w, CV_8UC1);
 
     const int    npoints  = 512;
     const Point* pattern0 = (const Point*)bit_pattern_31_;
     std::copy(pattern0, pattern0 + npoints, std::back_inserter(pattern));
+
+    _clahe = cv::createCLAHE();
+    _clahe->setClipLimit(2.0);
+    _clahe->setTilesGridSize(cv::Size(8, 8));
 }
 
 static void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const vector<Point>& pattern)
@@ -1152,6 +1156,18 @@ static void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Ma
 void GLSLextractor::operator()(InputArray _image, vector<KeyPoint>& _keypoints, OutputArray _descriptors)
 {
     images[idx] = _image.getMat().clone();
+
+    if (_clahe)
+    {
+        //cv::imwrite("claheBefore.png", images[idx]);
+        AVERAGE_TIMING_START("clahe");
+        _clahe->apply(images[idx], images[idx]);
+        AVERAGE_TIMING_STOP("clahe");
+        //std::cout << "clahe time: " << AverageTiming::getTime("clahe") << std::endl;
+
+        //cv::imwrite("claheAfter.png", images[idx]);
+    }
+
     Mat m;
     Mat descriptors;
 
@@ -1174,7 +1190,7 @@ void GLSLextractor::operator()(InputArray _image, vector<KeyPoint>& _keypoints, 
         descriptors = _descriptors.getMat();
     }
 
-    idx = (idx+1)%2;
+    idx = (idx + 1) % 2;
     Mat workingMat;
     GaussianBlur(images[idx], workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
 

@@ -23,32 +23,27 @@
 #include <jni.h>
 #include <errno.h>
 #include <cassert>
+#include <chrono>
+#include <string>
 
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
-#include <chrono>
 
 #include <android/input.h>
 #include <android/sensor.h>
 #include <android/asset_manager.h>
 #include <android/log.h>
+
 #include <android_native_app_glue.h>
-
 #include <AppDemoNativeSensorsInterface.h>
-
 #include <Utils.h>
-
 #include <WAIApp.h>
-
-#include <string>
-
 #include <android/SENSNdkCamera.h>
 
-#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "native-activity", __VA_ARGS__))
-#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, "native-activity", __VA_ARGS__))
-
-SENSNdkCamera* ndkCamera = nullptr;
-
+SENSNdkCamera*      ndkCamera         = nullptr;
+bool                cameraGranted     = false;
+struct android_app* androidApp        = nullptr;
+bool                defaultSlamLoaded = false;
 struct Engine
 {
     SensorsHandler* sensorsHandler;
@@ -58,8 +53,6 @@ struct Engine
     int32_t         width;
     int32_t         height;
 
-    int run;
-
     WAIApp waiApp;
 
     // input stuff
@@ -67,10 +60,39 @@ struct Engine
     uint64_t lastTouchMS;
 };
 
-void startNdkCamera(jboolean permission)
+void checkAndRequestAndroidPermissions(struct android_app* app)
 {
-    if (permission != JNI_FALSE && !ndkCamera)
+    JNIEnv*          env;
+    ANativeActivity* activity = app->activity;
+    activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6);
+
+    activity->vm->AttachCurrentThread(&env, NULL);
+
+    jobject activityObj = env->NewGlobalRef(activity->clazz);
+    jclass  clz         = env->GetObjectClass(activityObj);
+    env->CallVoidMethod(activityObj,
+                        env->GetMethodID(clz, "RequestCamera", "()V"));
+    env->DeleteGlobalRef(activityObj);
+
+    activity->vm->DetachCurrentThread();
+
+    /*bool hasPermission = isPermissionGranted(app, "CAMERA") && isPermissionGranted(app, "INTERNET");
+    if (!hasPermission)
     {
+        requestPermission(app);
+    }*/
+}
+
+void startNdkCamera()
+{
+    if (!androidApp)
+        return;
+
+    if (cameraGranted)
+    {
+        if (ndkCamera)
+            delete ndkCamera;
+
         //get all information about available cameras
         ndkCamera = new SENSNdkCamera(SENSCamera::Facing::BACK);
         //start continious captureing request with certain configuration
@@ -78,8 +100,26 @@ void startNdkCamera(jboolean permission)
         camConfig.targetWidth          = 640;
         camConfig.targetHeight         = 360;
         camConfig.focusMode            = SENSCamera::FocusMode::FIXED_INFINITY_FOCUS;
+        camConfig.convertToGray        = true;
         camConfig.adjustAsynchronously = true;
         ndkCamera->start(camConfig);
+
+        Engine* engine = (Engine*)androidApp->userData;
+        engine->waiApp.setCamera(ndkCamera);
+    }
+    else
+    {
+        checkAndRequestAndroidPermissions(androidApp);
+    }
+}
+
+void onPermissionGranted(jboolean granted)
+{
+    cameraGranted = (granted != JNI_FALSE);
+
+    if (cameraGranted)
+    {
+        startNdkCamera();
     }
 }
 
@@ -89,7 +129,7 @@ Java_ch_cpvr_nativewai_WAIActivity_notifyCameraPermission(
   jclass   type,
   jboolean permission)
 {
-    std::thread permissionHandler(&startNdkCamera, permission);
+    std::thread permissionHandler(&onPermissionGranted, permission);
     permissionHandler.detach();
 }
 
@@ -101,23 +141,27 @@ std::string getInternalDir(android_app* app)
 
     switch (jvm->GetEnv((void**)&env, JNI_VERSION_1_6))
     {
-        case JNI_OK: {
+        case JNI_OK:
+        {
         }
         break;
-        case JNI_EDETACHED: {
+        case JNI_EDETACHED:
+        {
             jint result = jvm->AttachCurrentThread(&env, nullptr);
             if (result == JNI_ERR)
             {
                 //TODO(dgj1): error handling
-                LOGW("Could not attach thread to jvm\n");
+                Utils::log("WAI", "Could not attach thread to jvm");
                 return "";
             }
             threadAttached = true;
         }
         break;
-        case JNI_EVERSION: {
+        case JNI_EVERSION:
+        {
             //TODO(dgj1): error handling
-            LOGW("unsupported java version\n");
+            Utils::log("WAI", "unsupported java version");
+            Utils::log("WAI", "unsupported java version");
             return "";
         }
     }
@@ -128,14 +172,14 @@ std::string getInternalDir(android_app* app)
     if (!classContext)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get classContext\n");
+        Utils::log("WAI","could not get classContext\n");
         return "";
     }
     jmethodID methodIDgetFilesDir = env->GetMethodID(classContext, "getFilesDir", "()Ljava/io/File;");
     if (!methodIDgetFilesDir)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get methodIDgetExternalFilesDir\n");
+        Utils::log("WAI","could not get methodIDgetExternalFilesDir\n");
         return "";
     }
     jobject    objectFile = env->CallObjectMethod(objectActivity, methodIDgetFilesDir);
@@ -151,14 +195,14 @@ std::string getInternalDir(android_app* app)
     if (!classFile)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get classFile\n");
+        Utils::log("WAI","could not get classFile\n");
         return "";
     }
     jmethodID methodIDgetAbsolutePath = env->GetMethodID(classFile, "getAbsolutePath", "()Ljava/lang/String;");
     if (!methodIDgetAbsolutePath)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get methodIDgetAbsolutePath\n");
+        Utils::log("WAI","could not get methodIDgetAbsolutePath\n");
         return "";
     }
     jstring stringPath = (jstring)env->CallObjectMethod(objectFile, methodIDgetAbsolutePath);
@@ -191,32 +235,38 @@ void extractAPKFolder(android_app* app, std::string internalPath, std::string as
 
     switch (jvm->GetEnv((void**)&env, JNI_VERSION_1_6))
     {
-        case JNI_OK: {
+        case JNI_OK:
+        {
         }
         break;
-        case JNI_EDETACHED: {
+        case JNI_EDETACHED:
+        {
             jint result = jvm->AttachCurrentThread(&env, nullptr);
             if (result == JNI_ERR)
             {
                 //TODO(dgj1): error handling
-                LOGW("Could not attach thread to jvm\n");
+                Utils::log("WAI","Could not attach thread to jvm\n");
                 return;
             }
             threadAttached = true;
         }
         break;
-        case JNI_EVERSION: {
+        case JNI_EVERSION:
+        {
             //TODO(dgj1): error handling
-            LOGW("unsupported java version\n");
+            Utils::log("WAI","unsupported java version\n");
             return;
         }
     }
 
     std::string outputPath = Utils::unifySlashes(internalPath + "/" + assetDirPath + "/");
-    if (!Utils::dirExists(outputPath))
+    if (Utils::dirExists(outputPath))
     {
-        Utils::makeDir(outputPath);
+        //stop here, we assume everything is installed (uninstall the app if you added assets)
+        return;
     }
+
+    Utils::makeDir(outputPath);
 
     AAssetManager* mgr      = app->activity->assetManager;
     AAssetDir*     assetDir = AAssetManager_openDir(mgr, assetDirPath.c_str());
@@ -252,23 +302,26 @@ std::string getExternalDir(android_app* app)
 
     switch (jvm->GetEnv((void**)&env, JNI_VERSION_1_6))
     {
-        case JNI_OK: {
+        case JNI_OK:
+        {
         }
         break;
-        case JNI_EDETACHED: {
+        case JNI_EDETACHED:
+        {
             jint result = jvm->AttachCurrentThread(&env, nullptr);
             if (result == JNI_ERR)
             {
                 //TODO(dgj1): error handling
-                LOGW("Could not attach thread to jvm\n");
+                Utils::log("WAI","Could not attach thread to jvm\n");
                 return "";
             }
             threadAttached = true;
         }
         break;
-        case JNI_EVERSION: {
+        case JNI_EVERSION:
+        {
             //TODO(dgj1): error handling
-            LOGW("unsupported java version\n");
+            Utils::log("WAI","unsupported java version\n");
             return "";
         }
     }
@@ -279,14 +332,14 @@ std::string getExternalDir(android_app* app)
     if (!classContext)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get classContext\n");
+        Utils::log("WAI","could not get classContext\n");
         return "";
     }
     jmethodID methodIDgetExternalFilesDir = env->GetMethodID(classContext, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
     if (!methodIDgetExternalFilesDir)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get methodIDgetExternalFilesDir\n");
+        Utils::log("WAI","could not get methodIDgetExternalFilesDir\n");
         return "";
     }
     std::string s;
@@ -304,14 +357,14 @@ std::string getExternalDir(android_app* app)
     if (!classFile)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get classFile\n");
+        Utils::log("WAI","could not get classFile\n");
         return "";
     }
     jmethodID methodIDgetAbsolutePath = env->GetMethodID(classFile, "getAbsolutePath", "()Ljava/lang/String;");
     if (!methodIDgetAbsolutePath)
     {
         //TODO(dgj1): error handling
-        LOGW("could not get methodIDgetAbsolutePath\n");
+        Utils::log("WAI","could not get methodIDgetAbsolutePath\n");
         return "";
     }
     jstring stringPath = (jstring)env->CallObjectMethod(objectFile, methodIDgetAbsolutePath);
@@ -353,23 +406,26 @@ bool isPermissionGranted(struct android_app* app, const char* permissionName)
 
     switch (jvm->GetEnv((void**)&env, JNI_VERSION_1_6))
     {
-        case JNI_OK: {
+        case JNI_OK:
+        {
         }
         break;
-        case JNI_EDETACHED: {
+        case JNI_EDETACHED:
+        {
             jint result = jvm->AttachCurrentThread(&env, nullptr);
             if (result == JNI_ERR)
             {
                 //TODO(dgj1): error handling
-                LOGW("Could not attach thread to jvm\n");
+                Utils::log("WAI","Could not attach thread to jvm\n");
                 return "";
             }
             threadAttached = true;
         }
         break;
-        case JNI_EVERSION: {
+        case JNI_EVERSION:
+        {
             //TODO(dgj1): error handling
-            LOGW("unsupported java version\n");
+            Utils::log("WAI","unsupported java version\n");
             return "";
         }
     }
@@ -403,23 +459,26 @@ void requestPermission(struct android_app* app)
 
     switch (jvm->GetEnv((void**)&env, JNI_VERSION_1_6))
     {
-        case JNI_OK: {
+        case JNI_OK:
+        {
         }
         break;
-        case JNI_EDETACHED: {
+        case JNI_EDETACHED:
+        {
             jint result = jvm->AttachCurrentThread(&env, nullptr);
             if (result == JNI_ERR)
             {
                 //TODO(dgj1): error handling
-                LOGW("Could not attach thread to jvm\n");
+                Utils::log("WAI","Could not attach thread to jvm\n");
                 return;
             }
             threadAttached = true;
         }
         break;
-        case JNI_EVERSION: {
+        case JNI_EVERSION:
+        {
             //TODO(dgj1): error handling
-            LOGW("unsupported java version\n");
+            Utils::log("WAI","unsupported java version\n");
             return;
         }
     }
@@ -440,33 +499,19 @@ void requestPermission(struct android_app* app)
     }
 }
 
-void checkAndRequestAndroidPermissions(struct android_app* app, Engine* engine)
-{
-    JNIEnv*          env;
-    ANativeActivity* activity = app->activity;
-    activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6);
-
-    activity->vm->AttachCurrentThread(&env, NULL);
-
-    jobject activityObj = env->NewGlobalRef(activity->clazz);
-    jclass  clz         = env->GetObjectClass(activityObj);
-    env->CallVoidMethod(activityObj,
-                        env->GetMethodID(clz, "RequestCamera", "()V"));
-    env->DeleteGlobalRef(activityObj);
-
-    activity->vm->DetachCurrentThread();
-
-    /*bool hasPermission = isPermissionGranted(app, "CAMERA") && isPermissionGranted(app, "INTERNET");
-    if (!hasPermission)
-    {
-        requestPermission(app);
-    }*/
-}
-
 static void onInit(void* usrPtr, struct android_app* app)
 {
+    Utils::log("WAI","onInit start");
+    if (app->window == NULL)
+    {
+        Utils::log("WAI","onInit handle return");
+        return;
+    }
+
+    Utils::log("WAI","onInit startNdkCamera");
+    startNdkCamera();
+
     Engine* engine = (Engine*)usrPtr;
-    checkAndRequestAndroidPermissions(app, engine);
     /*
      * Here specify the attributes of the desired configuration.
      * Below, we select an EGLConfig with at least 8 bits per color
@@ -539,7 +584,7 @@ static void onInit(void* usrPtr, struct android_app* app)
 
     if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE)
     {
-        LOGW("Unable to eglMakeCurrent");
+        Utils::log("WAI","onInit Unable to eglMakeCurrent");
         return;
     }
 
@@ -551,14 +596,13 @@ static void onInit(void* usrPtr, struct android_app* app)
     engine->surface = surface;
     engine->width   = w;
     engine->height  = h;
-    engine->run     = true;
 
     // Check openGL on the system
     auto opengl_info = {GL_VENDOR, GL_RENDERER, GL_VERSION, GL_EXTENSIONS};
     for (auto name : opengl_info)
     {
         auto info = glGetString(name);
-        LOGI("OpenGL Info: %s", info);
+        Utils::log("WAI","OpenGL Info: %s", info);
     }
 
     glViewport(0, 0, w, h);
@@ -572,11 +616,16 @@ static void onInit(void* usrPtr, struct android_app* app)
     extractAPKFolder(app, path, "shaders");
     extractAPKFolder(app, path, "calibrations");
     extractAPKFolder(app, path, "config");
+    extractAPKFolder(app, path, "voc");
+
+    std::string externalPath = getExternalDir(app);
 
     AppDirectories dirs;
-    dirs.slDataRoot  = path;
-    dirs.waiDataRoot = path;
-    dirs.writableDir = path + "/";
+    dirs.slDataRoot    = path;
+    dirs.waiDataRoot   = path + "/";
+    dirs.writableDir   = externalPath + "/";
+    dirs.vocabularyDir = path + "/voc/";
+    dirs.logFileDir    = externalPath + "/log/";
 
     CVImage::defaultPath = dirs.slDataRoot + "/images/textures/";
 
@@ -584,11 +633,17 @@ static void onInit(void* usrPtr, struct android_app* app)
     AConfiguration_fromAssetManager(appConfig, app->activity->assetManager);
     int32_t dpi = AConfiguration_getDensity(appConfig);
     AConfiguration_delete(appConfig);
-    engine->waiApp.load(640, 360, w, h, 1.0, 1.0, dpi, dirs);
+    Utils::log("WAI", "onInit waiApp.load");
+    engine->waiApp.load(w, h, 1.0, 1.0, dpi, dirs);
 }
 
 static void onClose(void* usrPtr, struct android_app* app)
 {
+    if (ndkCamera)
+    {
+        delete ndkCamera;
+        ndkCamera = nullptr;
+    }
     Engine* engine = (Engine*)usrPtr;
 
     if (engine->display != EGL_NO_DISPLAY)
@@ -608,7 +663,9 @@ static void onClose(void* usrPtr, struct android_app* app)
     engine->display = EGL_NO_DISPLAY;
     engine->context = EGL_NO_CONTEXT;
     engine->surface = EGL_NO_SURFACE;
-    engine->run     = false;
+
+    //always completely close for now..
+    engine->waiApp.close();
 }
 
 static void onSaveState(void* usrPtr)
@@ -658,12 +715,12 @@ static void handleTouchDown(Engine* engine, AInputEvent* event)
 
         if (touchDeltaMS < 250)
         {
-            LOGI("double click");
+            Utils::log("WAI","double click");
             engine->waiApp.doubleClick(sceneViewIndex, MB_left, x0, y0, K_none);
         }
         else
         {
-            LOGI("mouse down");
+            Utils::log("WAI","mouse down");
             engine->waiApp.mouseDown(sceneViewIndex, MB_left, x0, y0, K_none);
         }
     }
@@ -671,7 +728,7 @@ static void handleTouchDown(Engine* engine, AInputEvent* event)
     // it's two fingers but one delayed (already executed mouse down)
     else if (touchCount == 2 && engine->pointersDown == 1)
     {
-        LOGI("mouse up + touch 2 down");
+        Utils::log("WAI","mouse up + touch 2 down");
         int x1 = AMotionEvent_getX(event, 1);
         int y1 = AMotionEvent_getY(event, 1);
         engine->waiApp.mouseUp(sceneViewIndex, MB_left, x0, y0, K_none);
@@ -689,7 +746,7 @@ static void handleTouchDown(Engine* engine, AInputEvent* event)
         int x1 = AMotionEvent_getX(event, 1);
         int y1 = AMotionEvent_getY(event, 1);
 
-        LOGI("touch 2 down");
+        Utils::log("WAI","touch 2 down");
         engine->waiApp.touch2Down(sceneViewIndex, x0, y0, x1, y1);
     }
 
@@ -705,7 +762,7 @@ static void handleTouchUp(Engine* engine, AInputEvent* event)
 
     if (touchCount == 1)
     {
-        LOGI("mouse up");
+        Utils::log("WAI","mouse up");
         engine->waiApp.mouseUp(sceneViewIndex, MB_left, x0, y0, K_none);
     }
     else if (touchCount == 2)
@@ -713,7 +770,7 @@ static void handleTouchUp(Engine* engine, AInputEvent* event)
         int32_t x1 = AMotionEvent_getX(event, 1);
         int32_t y1 = AMotionEvent_getY(event, 1);
 
-        LOGI("touch 2 up");
+        Utils::log("WAI","touch 2 up");
         engine->waiApp.touch2Up(sceneViewIndex, x0, y0, x1, y1);
     }
 
@@ -729,7 +786,7 @@ static void handleTouchMove(Engine* engine, AInputEvent* event)
 
     if (touchCount == 1)
     {
-        LOGI("mouse move");
+        Utils::log("WAI","mouse move");
         engine->waiApp.mouseMove(sceneViewIndex, x0, y0);
     }
     else if (touchCount == 2)
@@ -737,7 +794,7 @@ static void handleTouchMove(Engine* engine, AInputEvent* event)
         int32_t x1 = AMotionEvent_getX(event, 1);
         int32_t y1 = AMotionEvent_getY(event, 1);
 
-        LOGI("touch 2 move");
+        Utils::log("WAI","touch 2 move");
         engine->waiApp.touch2Move(sceneViewIndex, x0, y0, x1, y1);
     }
 }
@@ -753,18 +810,21 @@ static int32_t handleInput(struct android_app* app, AInputEvent* event)
         switch (actionCode)
         {
             case AMOTION_EVENT_ACTION_DOWN:
-            case AMOTION_EVENT_ACTION_POINTER_DOWN: {
+            case AMOTION_EVENT_ACTION_POINTER_DOWN:
+            {
                 handleTouchDown(engine, event);
             }
             break;
 
             case AMOTION_EVENT_ACTION_UP:
-            case AMOTION_EVENT_ACTION_POINTER_UP: {
+            case AMOTION_EVENT_ACTION_POINTER_UP:
+            {
                 handleTouchUp(engine, event);
             }
             break;
 
-            case AMOTION_EVENT_ACTION_MOVE: {
+            case AMOTION_EVENT_ACTION_MOVE:
+            {
                 handleTouchMove(engine, event);
             }
         }
@@ -776,29 +836,33 @@ static int32_t handleInput(struct android_app* app, AInputEvent* event)
 
 static void handleLifecycleEvent(struct android_app* app, int32_t cmd)
 {
+    Utils::log("WAI","handleLifecycleEvent: called");
     Engine* engine = (Engine*)app->userData;
     switch (cmd)
     {
         case APP_CMD_SAVE_STATE:
+            Utils::log("WAI","handleLifecycleEvent: APP_CMD_SAVE_STATE");
             onSaveState(engine);
             break;
         case APP_CMD_INIT_WINDOW:
-            if (app->window != NULL)
-            {
-                onInit(engine, app);
-            }
+            Utils::log("WAI","handleLifecycleEvent: APP_CMD_INIT_WINDOW");
+            onInit(engine, app);
             break;
         case APP_CMD_TERM_WINDOW:
+            Utils::log("WAI","handleLifecycleEvent: APP_CMD_TERM_WINDOW");
             onClose(engine, app);
             break;
         case APP_CMD_GAINED_FOCUS:
+            Utils::log("WAI","handleLifecycleEvent: APP_CMD_GAINED_FOCUS");
             onGainedFocus(engine);
             break;
         case APP_CMD_LOST_FOCUS:
+            Utils::log("WAI","handleLifecycleEvent: APP_CMD_LOST_FOCUS");
             onLostFocus(engine);
             break;
         case APP_CMD_CONFIG_CHANGED:
-            checkAndRequestAndroidPermissions(app, engine);
+            Utils::log("WAI","handleLifecycleEvent: APP_CMD_CONFIG_CHANGED");
+            //checkAndRequestAndroidPermissions(app);
             break;
     }
 }
@@ -812,6 +876,7 @@ void android_main(struct android_app* app)
 {
     try
     {
+        Utils::log("WAI","handleLifecycleEvent: android_main");
         Engine engine = {};
 
         SensorsCallbacks callbacks;
@@ -821,13 +886,13 @@ void android_main(struct android_app* app)
         app->onAppCmd     = handleLifecycleEvent;
         app->onInputEvent = handleInput;
         app->userData     = &engine;
+        androidApp        = app;
 
         //checkAndRequestAndroidPermissions(app);
 
         initSensorsHandler(app, &callbacks, &engine.sensorsHandler);
 
-        engine.run = true;
-        while (engine.run)
+        while (true)
         {
             int                         ident;
             int                         events;
@@ -835,6 +900,7 @@ void android_main(struct android_app* app)
 
             while ((ident = ALooper_pollAll(0, NULL, &events, (void**)&source)) >= 0)
             {
+                //LOGI("handleLifecycle while loop");
                 if (source != NULL)
                 {
                     source->process(app, source);
@@ -848,30 +914,31 @@ void android_main(struct android_app* app)
                 // Check if we are exiting.
                 if (app->destroyRequested != 0)
                 {
-                    onClose(&engine, app);
+                    Utils::log("WAI","handleLifecycleEvent destroyRequested");
+                    //onClose(&engine, app);
                     return;
                 }
             }
 
             if (engine.display != nullptr && ndkCamera != nullptr)
             {
-                SENSFramePtr sensFrame = ndkCamera->getLatestFrame();
-                if (sensFrame)
-                    engine.waiApp.updateVideoImage(sensFrame->imgRGB);
-                else
-                    engine.waiApp.updateVideoImage(cv::Mat());
-
-                eglSwapBuffers(engine.display, engine.surface);
+                if (!defaultSlamLoaded)
+                {
+                    defaultSlamLoaded = true;
+                    engine.waiApp.loadSlam();
+                }
+                if (engine.waiApp.update())
+                    eglSwapBuffers(engine.display, engine.surface);
             }
 
-            std::this_thread::sleep_for(10ms);
+            //std::this_thread::sleep_for(10ms);
         }
 
-        engine.waiApp.close();
+        //engine.waiApp.close();
     }
     catch (std::exception& e)
     {
         //todo: what do we do then?
-        LOGI(e.what());
+        Utils::log("WAI",e.what());
     }
 }

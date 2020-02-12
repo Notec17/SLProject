@@ -20,21 +20,19 @@
 class AppDemoGuiSlamLoad : public AppDemoGuiInfosDialog
 {
 public:
-    AppDemoGuiSlamLoad(const std::string&      name,
-                       std ::queue<WAIEvent*>* eventQueue,
-                       std::string             slamRootDir,
-                       std::string             calibrationsDir,
-                       std::string             vocabulariesDir,
-                       bool*                   activator,
-                       SlamParams&             currentSlamParams);
+    AppDemoGuiSlamLoad(const std::string&              name,
+                       std ::queue<WAIEvent*>*         eventQueue,
+                       std::string                     slamRootDir,
+                       std::string                     calibrationsDir,
+                       std::string                     vocabulariesDir,
+                       const std::vector<std::string>& extractorIdToNames,
+                       bool*                           activator);
 
     void buildInfos(SLScene* s, SLSceneView* sv) override;
+    void setSlamParams(const SlamParams& params);
 
 private:
-    void loadFileNamesInVector(std::string               directory,
-                               std::vector<std::string>& fileNames,
-                               std::vector<std::string>& extensions,
-                               bool                      addEmpty);
+    void loadFileNamesInVector(std::string directory, std::vector<std::string>& fileNames, std::vector<std::string>& extensions, bool addEmpty);
     void loadDirNamesInVector(std::string               directory,
                               std::vector<std::string>& dirNames);
 
@@ -50,21 +48,9 @@ private:
     std::vector<std::string> _calibExtensions;
     std::vector<std::string> _vocExtensions;
 
-    std::string _currentLocation;
-    std::string _currentArea;
-    std::string _currentVideo;
-    std::string _currentCalibration;
-    std::string _currentMap;
-    std::string _currentVoc;
-    std::string _currentMarker;
+    const std::vector<std::string>& _extractorIdToNames;
 
-    bool _storeKeyFrameImage;
-    bool _trackOpticalFlow;
-    bool _serial;
-    bool _trackingOnly;
-    bool fixLoadedKfs;
-
-    SlamParams& _currentSlamParams;
+    SlamParams _p;
 
     std::queue<WAIEvent*>* _eventQueue;
 };

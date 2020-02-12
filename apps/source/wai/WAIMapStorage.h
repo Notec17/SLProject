@@ -16,8 +16,8 @@ public:
                         std::string imgDir = "");
 
     static bool loadMap(WAIMap*        waiMap,
-                        WAIKeyFrameDB* kfDB,
                         SLNode*        mapNode,
+                        ORBVocabulary* voc,
                         std::string    path,
                         bool           loadImgs,
                         bool           fixKfsAndMPts);

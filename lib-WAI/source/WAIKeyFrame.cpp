@@ -57,9 +57,7 @@ WAIKeyFrame::WAIKeyFrame(const cv::Mat&                   Tcw,
                          int                              nMinY,
                          int                              nMaxX,
                          int                              nMaxY,
-                         const cv::Mat&                   K,
-                         WAIKeyFrameDB*                   pKFDB,
-                         WAIMap*                          pMap)
+                         const cv::Mat&                   K)
   : mnId(id),
     mnFrameId(0),
     mTimeStamp(0),
@@ -97,13 +95,11 @@ WAIKeyFrame::WAIKeyFrame(const cv::Mat&                   Tcw,
     mnMaxX(nMaxX),
     mnMaxY(nMaxY),
     mK(K.clone()),
-    _kfDb(pKFDB),
     mbFirstConnection(true),
     mpParent(NULL),
     mbNotErase(false),
     mbToBeErased(false),
-    mbBad(false),
-    mpMap(pMap)
+    mbBad(false)
 {
     //Update next id so we never have twice the same id and especially only one with 0 (this is important)
     if (id >= nNextId)
@@ -120,7 +116,7 @@ WAIKeyFrame::WAIKeyFrame(const cv::Mat&                   Tcw,
     AssignFeaturesToGrid();
 }
 //-----------------------------------------------------------------------------
-WAIKeyFrame::WAIKeyFrame(WAIFrame& F, WAIMap* pMap, WAIKeyFrameDB* pKFDB, bool retainImg)
+WAIKeyFrame::WAIKeyFrame(WAIFrame& F, bool retainImg)
   : mnFrameId(F.mnId),
     mTimeStamp(F.mTimeStamp),
     mnGridCols(FRAME_GRID_COLS),
@@ -160,13 +156,11 @@ WAIKeyFrame::WAIKeyFrame(WAIFrame& F, WAIMap* pMap, WAIKeyFrameDB* pKFDB, bool r
     mnMaxY(F.mnMaxY),
     mK(F.mK),
     mvpMapPoints(F.mvpMapPoints),
-    _kfDb(pKFDB),
     /*mpORBvocabulary(F.mpORBvocabulary),*/ mbFirstConnection(true),
     mpParent(NULL),
     mbNotErase(false),
     mbToBeErased(false),
-    mbBad(false) /*, mHalfBaseline(F.mb / 2)*/,
-    mpMap(pMap)
+    mbBad(false) /*, mHalfBaseline(F.mb / 2)*/
 {
     mnId = nNextId++;
 
@@ -705,9 +699,7 @@ void WAIKeyFrame::SetBadFlag()
         mbBad = true;
     }
 
-    //ghm1: map pointer is only used to erase key frames here
-    mpMap->EraseKeyFrame(this);
-    _kfDb->erase(this);
+    //_kfDb->erase(this);
 }
 //-----------------------------------------------------------------------------
 bool WAIKeyFrame::findChildRecursive(WAIKeyFrame* kf)

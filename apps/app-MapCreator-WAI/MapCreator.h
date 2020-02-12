@@ -5,8 +5,16 @@
 #include <WAIHelper.h>
 #include <Utils.h>
 #include <AppWAISlamParamHelper.h>
-#include <WAIModeOrbSlam2.h>
+#include <WAISlam.h>
 #include <WAIMapStorage.h>
+
+#define WAI_DEBUG(...) Utils::log("[DEBUG]", __VA_ARGS__)
+#define WAI_INFO(...) Utils::log("[INFO ]", __VA_ARGS__)
+#define WAI_WARN(...) Utils::log("[WARN ]", __VA_ARGS__)
+
+//#define WAI_DEBUG(...) // nothing
+//#define WAI_INFO(...)  // nothing
+//#define WAI_WARN(...)  // nothing
 
 class MapCreator
 {
@@ -27,7 +35,8 @@ class MapCreator
     typedef std::map<Area, AreaConfig> Areas;
 
 public:
-    MapCreator(std::string erlebARDir, std::string configFile);
+    MapCreator(std::string erlebARDir, std::string configFile, std::string vocFile);
+    ~MapCreator();
     //! execute map creation
     void execute();
     //! Scan erlebar directory and config file, collect everything that is enabled in the config file and
@@ -46,17 +55,15 @@ public:
                           const std::string  outputMapFile,
                           CVCalibration&     calib,
                           const float        cullRedundantPerc);
-    void cullKeyframes(std::vector<WAIKeyFrame*>& kfs, const float cullRedundantPerc);
-    void decorateDebug(WAI::ModeOrbSlam2* waiMode, CVCapture* cap, const int currentFrameIndex, const int videoLength, const int numOfKfs);
-    void saveMap(WAI::ModeOrbSlam2* waiMode, const std::string& mapDir, const std::string& currentMapFileName, SLNode* mapNode = nullptr);
-    void loadMap(WAI::ModeOrbSlam2* waiMode, const std::string& mapDir, const std::string& currentMapFileName, bool fixKfsForLBA, SLNode* mapNode);
+    void cullKeyframes(WAISlam* waiMode, std::vector<WAIKeyFrame*>& kfs, const float cullRedundantPerc);
+    void decorateDebug(WAISlam* waiMode, CVCapture* cap, const int currentFrameIndex, const int videoLength, const int numOfKfs);
+    void saveMap(WAISlam* waiMode, const std::string& mapDir, const std::string& currentMapFileName, SLNode* mapNode = nullptr);
+    void loadMap(WAISlam* waiMode, const std::string& mapDir, const std::string& currentMapFileName, bool fixKfsForLBA, SLNode* mapNode);
 
-    WAIFrame createMarkerFrame(std::string  markerFile,
-                               KPextractor* markerExtractor);
-    bool     findMarkerHomography(WAIFrame&    markerFrame,
-                                  WAIKeyFrame* kfCand,
-                                  cv::Mat&     homography,
-                                  int          minMatches);
+    bool createMarkerMap(AreaConfig&        areaConfig,
+                         const std::string& mapFile,
+                         const std::string& mapDir,
+                         const float        cullRedundantPerc);
 
 private:
     MapCreator() {}
@@ -66,17 +73,14 @@ private:
     std::string               _calibrationsDir;
     std::string               _outputDir;
 
-    bool doMarkerMapPreprocessing(const std::string& mapDir,
-                                  const std::string& inputMapFile,
-                                  std::string        markerFile,
-                                  float              markerWidthInM,
-                                  CVCalibration&     calib,
-                                  const float        cullRedundantPerc);
-
     WAIMapPoint* _mpUL;
     WAIMapPoint* _mpUR;
     WAIMapPoint* _mpLL;
     WAIMapPoint* _mpLR;
+
+    std::unique_ptr<KPextractor> _kpIniExtractor    = nullptr;
+    std::unique_ptr<KPextractor> _kpExtractor       = nullptr;
+    std::unique_ptr<KPextractor> _kpMarkerExtractor = nullptr;
 };
 
 #endif //MAP_CREATOR_H

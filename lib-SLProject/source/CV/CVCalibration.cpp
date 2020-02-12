@@ -19,6 +19,7 @@ for a good top down information.
 
 #include <CVCalibration.h>
 #include <Utils.h>
+#include <HighResTimer.h>
 
 using namespace cv;
 using namespace std;
@@ -60,7 +61,8 @@ CVCalibration::CVCalibration(cv::Mat            cameraMat,
                              bool               mirroredV,
                              CVCameraType       camType,
                              std::string        computerInfos,
-                             int                calibFlags)
+                             int                calibFlags,
+                             bool               calcUndistortionMaps)
   : _cameraMat(cameraMat.clone()),
     _distortion(distortion.clone()),
     _imageSize(imageSize),
@@ -132,8 +134,12 @@ CVCalibration::CVCalibration(float        sensorWMM,
 }
 //-----------------------------------------------------------------------------
 //! Loads the calibration information from the config file
+/*! Added a flag to disable calculation of undistortion maps because this may take
+    a lot of time for big images on mobile devices
+*/
 bool CVCalibration::load(const string& calibDir,
-                         const string& calibFileName)
+                         const string& calibFileName,
+                         bool          calcUndistortionMaps)
 {
     //load camera parameter
     string fullPathAndFilename = Utils::unifySlashes(calibDir) + calibFileName;
@@ -142,8 +148,8 @@ bool CVCalibration::load(const string& calibDir,
     FileStorage fs(fullPathAndFilename, FileStorage::READ);
     if (!fs.isOpened())
     {
-        Utils::log("Calibration     : %s\n", calibFileName.c_str());
-        Utils::log("Calib. created  : No. Calib. will be estimated\n");
+        Utils::log("SLProject", "Calibration     : %s", calibFileName.c_str());
+        Utils::log("SLProject", "Calib. created  : No. Calib. will be estimated");
         _numCaptured       = 0;
         _isMirroredH       = false;
         _isMirroredV       = false;
@@ -203,12 +209,13 @@ bool CVCalibration::load(const string& calibDir,
         //calcCameraFov();
         calculateUndistortedCameraMat();
         calcCameraFovFromUndistortedCameraMat();
-        buildUndistortionMaps();
+        if (calcUndistortionMaps)
+            buildUndistortionMaps();
     }
 
-    Utils::log("Calib. loaded  : %s\n", fullPathAndFilename.c_str());
-    Utils::log("Calib. created : %s\n", _calibrationTime.c_str());
-    Utils::log("Camera FOV H/V : %3.1f/%3.1f\n", _cameraFovVDeg, _cameraFovHDeg);
+    Utils::log("SLProject", "Calib. loaded  : %s", fullPathAndFilename.c_str());
+    Utils::log("SLProject", "Calib. created : %s", _calibrationTime.c_str());
+    Utils::log("SLProject", "Camera FOV H/V : %3.1f/%3.1f", _cameraFovVDeg, _cameraFovHDeg);
 
     _cameraMatOrig = _cameraMat.clone();
     _imageSizeOrig = _imageSize;
@@ -226,7 +233,7 @@ bool CVCalibration::save(const string& calibDir,
 
     if (!fs.isOpened())
     {
-        Utils::log("Failed to write calib. %s\n", fullPathAndFilename.c_str());
+        Utils::log("SLProject", "Failed to write calib. %s", fullPathAndFilename.c_str());
         return false;
     }
 
@@ -288,7 +295,7 @@ bool CVCalibration::save(const string& calibDir,
 
     // close file
     fs.release();
-    Utils::log("Calib. saved    : %s\n", fullPathAndFilename.c_str());
+    Utils::log("SLProject", "Calib. saved    : %s", fullPathAndFilename.c_str());
     return true;
     //uploadCalibration(fullPathAndFilename);
 }
@@ -351,14 +358,13 @@ void getInnerAndOuterRectangles(const cv::Mat&    cameraMatrix,
 void CVCalibration::buildUndistortionMaps()
 {
     if (_cameraMatUndistorted.rows != 3 || _cameraMatUndistorted.cols != 3)
-        Utils::exitMsg("CVCalibration::buildUndistortionMaps: No _cameraMatUndistorted available",
-                       __LINE__,
-                       __FILE__);
+        Utils::exitMsg("SLProject", "CVCalibration::buildUndistortionMaps: No _cameraMatUndistorted available", __LINE__, __FILE__);
 
     // Create undistortion maps
     _undistortMapX.release();
     _undistortMapY.release();
 
+    HighResTimer t;
     cv::initUndistortRectifyMap(_cameraMat,
                                 _distortion,
                                 cv::Mat(), // Identity matrix R
@@ -367,11 +373,10 @@ void CVCalibration::buildUndistortionMaps()
                                 CV_16SC2, //before we had CV_32FC1 but in all tutorials they use CV_16SC2.. is there a reason?
                                 _undistortMapX,
                                 _undistortMapY);
+    Utils::log("CVCalibration", "initUndistortRectifyMap: %fms", t.elapsedTimeInMilliSec());
 
     if (_undistortMapX.empty() || _undistortMapY.empty())
-        Utils::exitMsg("CVCalibration::buildUndistortionMaps failed.",
-                       __LINE__,
-                       __FILE__);
+        Utils::exitMsg("SLProject", "CVCalibration::buildUndistortionMaps failed.", __LINE__, __FILE__);
 }
 //-----------------------------------------------------------------------------
 //! Undistorts the inDistorted image into the outUndistorted
@@ -435,7 +440,7 @@ void CVCalibration::createFromGuessedFOV(int   imageWidthPX,
 }
 //-----------------------------------------------------------------------------
 //! Adapts an already calibrated camera to a new resolution (cropping and scaling)
-void CVCalibration::adaptForNewResolution(const CVSize& newSize)
+void CVCalibration::adaptForNewResolution(const CVSize& newSize, bool calcUndistortionMaps)
 {
     if (_state == CS_uncalibrated)
         return;
@@ -488,16 +493,15 @@ void CVCalibration::adaptForNewResolution(const CVSize& newSize)
 
     calculateUndistortedCameraMat();
     calcCameraFovFromUndistortedCameraMat();
-    buildUndistortionMaps();
+    if (calcUndistortionMaps)
+        buildUndistortionMaps();
 }
 //-----------------------------------------------------------------------------
 //! Calculate a camera matrix that we use for the scene graph and for the reprojection of the undistored image
 void CVCalibration::calculateUndistortedCameraMat()
 {
     if (_cameraMat.rows != 3 || _cameraMat.cols != 3)
-        Utils::exitMsg("CVCalibration::calculateUndistortedCameraMat: No intrinsic parameter available",
-                       __LINE__,
-                       __FILE__);
+        Utils::exitMsg("SLProject", "CVCalibration::calculateUndistortedCameraMat: No intrinsic parameter available", __LINE__, __FILE__);
 
     // An alpha of 0 leads to no black borders
     // An alpha of 1 leads to black borders
@@ -563,9 +567,7 @@ void CVCalibration::calculateUndistortedCameraMat()
 void CVCalibration::calcCameraFovFromUndistortedCameraMat()
 {
     if (_cameraMatUndistorted.rows != 3 || _cameraMatUndistorted.cols != 3)
-        Utils::exitMsg("CVCalibration::calcCameraFovFromSceneCameraMat: No _cameraMatUndistorted available",
-                       __LINE__,
-                       __FILE__);
+        Utils::exitMsg("SLProject", "CVCalibration::calcCameraFovFromSceneCameraMat: No _cameraMatUndistorted available", __LINE__, __FILE__);
 
     //calculate vertical field of view
     float fx       = (float)_cameraMatUndistorted.at<double>(0, 0);
