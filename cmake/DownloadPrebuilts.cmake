@@ -356,10 +356,12 @@ elseif("${SYSTEM_NAME_UPPER}" STREQUAL "DARWIN") #-----------------------------
     file(GLOB assimp_LIBS_to_copy_debug
             ${assimp_LIBS_to_copy_debug}
             ${assimp_DIR}/Debug/libassimpd*.dylib
+            ${assimp_DIR}/Debug/libIrrXMLd.dylib
             )
     file(GLOB assimp_LIBS_to_copy_release
             ${assimp_LIBS_to_copy_release}
             ${assimp_DIR}/Release/libassimp*.dylib
+            ${assimp_DIR}/Release/libIrrXML.dylib
             )
 
     if(${CMAKE_GENERATOR} STREQUAL Xcode)

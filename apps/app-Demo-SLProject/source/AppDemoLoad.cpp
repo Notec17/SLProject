@@ -2747,20 +2747,16 @@ void appDemoLoadScene(SLScene* s, SLSceneView* sv, SLSceneID sceneID)
         SLApplication::devLoc.sunLightNode(light);
 
         SLAssimpImporter importer;
-        //SLNode*          TheaterAndTempel = importer.load("DAE/AugustaRaurica/Tempel-Theater-02.dae");
-        SLNode* TheaterAndTempel = importer.load("GLTF/AugustaRaurica/Tempel-Theater-02.gltf");
-        //SLNode*          TheaterAndTempel = importer.load("FBX/AugustaRaurica/Tempel-Theater-02.fbx");
+        SLNode*          TheaterAndTempel = importer.load("GLTF/AugustaRaurica/Tempel-Theater-02.gltf",
+                                                 true,    // only meshes
+                                                 nullptr, // no replacement material
+                                                 0.4f);   // 40% ambient reflection
 
         // Add axis object a world origin (Loeb Ecke)
         SLNode* axis = new SLNode(new SLCoordAxis(), "Axis Node");
         axis->setDrawBitsRec(SL_DB_WIREMESH, false);
         axis->scale(10);
         axis->rotate(-90, 1, 0, 0);
-
-        // Set some ambient light
-        for (auto child : TheaterAndTempel->children())
-            for (auto mesh : child->meshes())
-                mesh->mat()->ambient(SLCol4f(0.25f, 0.23f, 0.15f));
 
         SLNode* scene = new SLNode("Scene");
         scene->addChild(light);
