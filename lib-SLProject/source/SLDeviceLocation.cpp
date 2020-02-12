@@ -196,22 +196,21 @@ SLbool SLDeviceLocation::calculateSolarAngles(SLdouble latDEG,
     ut.tm_mon++;
     lt.tm_mon++;
 
-    SL_LOG("\n");
-    SL_LOG("Universal time  : %02d.%02d.%02d %02d:%02d:%02d\n",
+    SL_LOG("Universal time  : %02d.%02d.%02d %02d:%02d:%02d",
            ut.tm_mday,
            ut.tm_mon,
            ut.tm_year,
            ut.tm_hour,
            ut.tm_min,
            ut.tm_sec);
-    SL_LOG("Local time      : %02d.%02d.%02d %02d:%02d:%02d\n",
+    SL_LOG("Local time      : %02d.%02d.%02d %02d:%02d:%02d",
            lt.tm_mday,
            lt.tm_mon,
            lt.tm_year,
            lt.tm_hour,
            lt.tm_min,
            lt.tm_sec);
-    SL_LOG("Timezone        : %d\n", lt.tm_hour - ut.tm_hour);
+    SL_LOG("Timezone        : %d", lt.tm_hour - ut.tm_hour);
 
     spa_data spa; //declare the SPA structure
     SLint    result;
